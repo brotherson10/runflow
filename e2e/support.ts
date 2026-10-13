@@ -119,25 +119,34 @@ export function stat(page: Page, label: string) {
 }
 
 
+/** Linhas de cada e-mail capturado para `email` e do tipo indicado, do mais recente ao mais antigo. */
+function mailsFor(email: string, kind: string): string[][] {
+  let files: string[];
+  try {
+    files = readdirSync(MAIL_DIR);
+  } catch {
+    return [];
+  }
+  return files
+    .filter((name) => name.includes(`-${kind}-`))
+    .map((name) => join(MAIL_DIR, name))
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+    .map((file) => readFileSync(file, "utf8").split(/\r?\n/).map((line) => line.trim()))
+    .filter((lines) => lines.includes(`Para: ${email}`));
+}
+
+/** Número de e-mails capturados para `email` e do tipo indicado. */
+export function countMails(email: string, kind: string): number {
+  return mailsFor(email, kind).length;
+}
+
 /**
  * Link do último e-mail capturado localmente para `email` e do tipo indicado. O
  * link é identificado por parsing de URL (origem da app, caminho exato e um único
  * `token`), não por padrões de texto.
  */
 export function readMailLink(email: string, kind: string, pathname: string): string | null {
-  let files: string[];
-  try {
-    files = readdirSync(MAIL_DIR);
-  } catch {
-    return null;
-  }
-  const sorted = files
-    .filter((name) => name.includes(`-${kind}-`))
-    .map((name) => join(MAIL_DIR, name))
-    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-  for (const file of sorted) {
-    const lines = readFileSync(file, "utf8").split(/\r?\n/).map((line) => line.trim());
-    if (!lines.includes(`Para: ${email}`)) continue;
+  for (const lines of mailsFor(email, kind)) {
     for (const word of lines.flatMap((line) => line.split(/\s+/))) {
       const url = URL.parse(word);
       if (url?.origin !== WEB_ORIGIN || url.pathname !== pathname) continue;
@@ -147,14 +156,19 @@ export function readMailLink(email: string, kind: string, pathname: string): str
   return null;
 }
 
-/** Espera pelo e-mail (enviado em segundo plano) e devolve o link mais recente. */
-export async function waitForMailLink(email: string, kind: string, pathname: string, previous?: string): Promise<string> {
+/**
+ * Espera até existirem `count` e-mails (enviados em segundo plano) e devolve o link
+ * do mais recente. Conta mensagens, não links distintos: o token de confirmação do
+ * Better Auth é um JWT com iat/exp em segundos, por isso dois envios no mesmo
+ * segundo têm o mesmo link.
+ */
+export async function waitForMailLink(email: string, kind: string, pathname: string, count = 1): Promise<string> {
   const found: { link: string | null } = { link: null };
   await expect
     .poll(
       () => {
         found.link = readMailLink(email, kind, pathname);
-        return found.link !== null && found.link !== previous;
+        return found.link !== null && countMails(email, kind) >= count;
       },
       { message: `e-mail ${kind} para ${email}` },
     )

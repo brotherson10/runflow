@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { E2E_COMPROMISED_PASSWORD, E2E_HIBP_FAILING_PASSWORD } from "./constants.ts";
-import { expect, newAccount, readMailLink, signIn, test, waitForMailLink } from "./support.ts";
+import { countMails, expect, newAccount, readMailLink, signIn, test, waitForMailLink } from "./support.ts";
 
 test.afterEach(({ consoleErrors }, testInfo) => {
   const allowed = testInfo.annotations.filter((a) => a.type === "allow-console").map((a) => a.description ?? "");
@@ -33,8 +33,11 @@ test("registo → e-mail capturado → login bloqueado → reenvio → confirma�
   await expect(page.getByLabel("E-mail da conta")).toHaveValue(account.email);
   await page.getByRole("button", { name: "Enviar novo link" }).click();
   await expect(page.getByRole("status")).toContainText("Se existir uma conta por confirmar com esse e-mail");
-  const secondLink = await waitForMailLink(account.email, "email-verification", "/confirmar-email", firstLink);
-  expect(secondLink).not.toBe(firstLink);
+  // Chega um segundo e-mail, e é com o link dele que a conta é confirmada. O link pode
+  // coincidir com o primeiro se o reenvio for no mesmo segundo (JWT com iat/exp em segundos).
+  const secondLink = await waitForMailLink(account.email, "email-verification", "/confirmar-email", 2);
+  expect(countMails(account.email, "email-verification")).toBe(2);
+  expect(new URL(firstLink).pathname).toBe("/confirmar-email");
 
   // A página do link não confirma sozinha: só depois do clique.
   await page.goto(secondLink);
@@ -63,6 +66,8 @@ test("registo com e-mail já existente: mesma página e nenhum e-mail novo", asy
   await expect(page).toHaveURL(/\/verificar-email$/);
   expect(await page.getByRole("status").textContent()).toBe(firstText);
   await page.waitForTimeout(500);
+  // Conta mensagens (um link igual não provaria nada: JWT com iat em segundos).
+  expect(countMails(account.email, "email-verification")).toBe(1);
   expect(readMailLink(account.email, "email-verification", "/confirmar-email")).toBe(link);
 });
 
