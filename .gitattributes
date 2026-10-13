@@ -1,0 +1,4 @@
+# Finais de linha LF em todas as plataformas: os SQL das migrations têm hash
+# registado na base, e um checkout com CRLF alteraria esse hash.
+* text=auto eol=lf
+*.png binary
