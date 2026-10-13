@@ -1,0 +1,55 @@
+{
+  "name": "runflow",
+  "version": "0.0.0",
+  "private": true,
+  "description": "RunFlow V2 — aplicação pessoal de acompanhamento de corrida.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24.12.0 <25",
+    "npm": ">=11"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build --workspaces --if-present",
+    "start": "npm run start --workspace @runflow/api",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:db": "vitest run --config vitest.db.config.ts",
+    "test:e2e": "playwright test",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "db:up": "docker compose up -d --wait postgres",
+    "db:stop": "docker compose stop postgres",
+    "db:status": "docker compose ps postgres",
+    "db:auth:generate": "npm run db:auth:generate --workspace @runflow/api",
+    "db:generate": "npm run db:generate --workspace @runflow/api --",
+    "db:check": "npm run db:check --workspace @runflow/api",
+    "db:migrate": "npm run db:migrate --workspace @runflow/api",
+    "db:migrate:deploy": "npm run migrate:deploy --workspace @runflow/api",
+    "db:migrations:status": "npm run db:migrations:status --workspace @runflow/api",
+    "db:purge-rate-limits": "npm run db:purge-rate-limits --workspace @runflow/api"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.19.1",
+    "eslint": "10.12.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.7",
+    "globals": "17.13.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "5.0.3"
+  },
+  "overrides": {
+    "vite": "8.3.2",
+    "zod": "4.6.5",
+    "playwright-core": "1.63.0"
+  }
+}

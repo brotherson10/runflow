@@ -1,0 +1,25 @@
+# Dependências e artefactos de build
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.vite/
+
+# Variáveis de ambiente locais (nunca versionar segredos)
+.env
+.env.*
+!.env.example
+
+# Logs e ficheiros de sistema
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Captura local de e-mails (apps/api/.mail-outbox)
+.mail-outbox/
+
+# Artefactos E2E (Playwright)
+.e2e/
+test-results/
+playwright-report/

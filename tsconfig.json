@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "es2024",
+      "dom"
+    ]
+  },
+  "include": [
+    "vitest.config.ts",
+    "vitest.db.config.ts",
+    "playwright.config.ts",
+    "eslint.security.js",
+    "tests/**/*.ts",
+    "e2e/**/*.ts"
+  ]
+}

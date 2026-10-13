@@ -1,0 +1,36 @@
+{
+  "name": "@runflow/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "API HTTP do RunFlow V2 (Express 5).",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --conditions=development --env-file-if-exists=../../.env src/server.ts",
+    "build": "node ../../scripts/clean.mjs dist && tsc -p tsconfig.build.json",
+    "start": "node --env-file-if-exists=../../.env dist/server.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "db:auth:generate": "node scripts/generate-auth-schema.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:check": "drizzle-kit check",
+    "db:migrate": "node --conditions=development --env-file-if-exists=../../.env scripts/db-migrate.ts",
+    "db:purge-rate-limits": "node --conditions=development --env-file-if-exists=../../.env scripts/db-purge-rate-limits.ts",
+    "migrate:deploy": "node dist/cli/migrate.js",
+    "migrate:status": "node dist/cli/migration-status.js",
+    "db:migrations:status": "node --conditions=development --env-file-if-exists=../../.env src/cli/migration-status.ts"
+  },
+  "dependencies": {
+    "@better-auth/drizzle-adapter": "1.7.7",
+    "@runflow/shared": "0.0.0",
+    "better-auth": "1.7.7",
+    "drizzle-orm": "0.45.3",
+    "express": "5.2.1",
+    "pg": "8.23.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/pg": "8.23.1",
+    "auth": "1.7.7",
+    "drizzle-kit": "0.31.11"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@runflow/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Schemas Zod, tipos e funções puras partilhados pelo RunFlow V2.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/clean.mjs dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  }
+}
