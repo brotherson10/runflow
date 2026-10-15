@@ -57,6 +57,8 @@ export interface AuthTestServerOptions {
   readonly apiRateLimit?: ApiRateLimitConfig;
   /** HIBP (simulado por fake-network.ts); por omissão ligado, como em produção. */
   readonly passwordBreachCheck?: { readonly enabled: boolean; readonly timeoutMs?: number };
+  /** Tarefas em segundo plano (na Vercel: waitUntil). */
+  readonly background?: (task: Promise<unknown>) => void;
 }
 
 /** Tempo máximo para pedidos em curso terminarem ao fechar (deteção, não mascaramento). */
@@ -86,6 +88,7 @@ export async function startAuthServer(
     mailer: mailbox,
     logger,
     ...(options.passwordBreachCheck ? { passwordBreachCheck: options.passwordBreachCheck } : {}),
+    ...(options.background ? { background: options.background } : {}),
   });
   const appOrigin = options.appOrigin ?? TEST_APP_ORIGIN;
   const app = createApp({

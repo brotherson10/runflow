@@ -22,6 +22,7 @@ export type ProblemCode =
   | "ACTIVE_GOAL_EXISTS"
   | "GOAL_NOT_ACTIVE"
   | "RATE_LIMITED"
+  | "SERVICE_UNAVAILABLE"
   | "INTERNAL";
 
 /**

@@ -15,6 +15,8 @@ export interface DatabaseOptions {
   readonly maxConnections?: number;
   readonly applicationName?: string;
   readonly onIdleError?: (error: Error) => void;
+  /** Fecha clientes inativos após este tempo (serverless: curto). Omissão do `pg`: 10 s. */
+  readonly idleTimeoutMs?: number;
 }
 
 /**
@@ -29,6 +31,7 @@ export function createDatabase(
     connectionString,
     max: options.maxConnections ?? 10,
     application_name: options.applicationName ?? "runflow-api",
+    ...(options.idleTimeoutMs === undefined ? {} : { idleTimeoutMillis: options.idleTimeoutMs }),
   });
   // Erros em clientes inativos (ex.: a base reinicia) não podem derrubar o processo.
   const onIdleError =

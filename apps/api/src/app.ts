@@ -18,6 +18,7 @@ import { createGoalsRouter } from "./goals/routes.ts";
 import type { DomainRouterOptions } from "./http/domain.ts";
 import { createWorkoutsRouter } from "./workouts/routes.ts";
 import { createWebRouter, type WebBuild } from "./http/web.ts";
+import { createCronRouter, type CronOptions } from "./http/cron.ts";
 
 export { JSON_BODY_LIMIT } from "./http/json.ts";
 
@@ -42,6 +43,8 @@ export interface AppOptions {
   readonly web?: WebBuild;
   /** Origem pública em HTTPS: acrescenta HSTS e upgrade-insecure-requests. */
   readonly https?: boolean;
+  /** Rota do Vercel Cron (limpeza de rate limiting); sem ela, a rota não existe. */
+  readonly cron?: CronOptions;
 }
 
 /** Cria a aplicação sem abrir portas; o arranque fica em server.ts. */
@@ -69,6 +72,8 @@ export function createApp(options: AppOptions = {}): Express {
   if (options.auth) {
     mountAuth(app, options.auth);
   }
+
+  if (options.cron) app.use(createCronRouter(options.cron));
 
   const v1 = express.Router();
 

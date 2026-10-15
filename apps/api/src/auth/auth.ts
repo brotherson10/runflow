@@ -72,6 +72,12 @@ export interface AuthDependencies {
    * fora de produção (readServerConfig). Por omissão: ligada.
    */
   readonly passwordBreachCheck?: { readonly enabled: boolean; readonly timeoutMs?: number };
+  /**
+   * Prolonga a execução até uma tarefa em segundo plano terminar (na Vercel,
+   * `waitUntil` de @vercel/functions: o e-mail é enviado antes de a função
+   * suspender). Num processo contínuo não é preciso.
+   */
+  readonly background?: (task: Promise<unknown>) => void;
 }
 
 function badRequest(code: string, message: string): APIError {
@@ -160,9 +166,10 @@ export function createAuth(deps: AuthDependencies) {
   // Envio sem `await`: o pedido não espera pelo e-mail (recomendação do Better Auth
   // contra diferenças de tempo entre contas existentes e inexistentes).
   const sendInBackground = (send: Promise<void>, kind: string): void => {
-    send.catch((error: unknown) => {
+    const task = send.catch((error: unknown) => {
       logger.error(`Falha ao enviar e-mail (${kind}): ${describeError(error)}`);
     });
+    deps.background?.(task);
   };
 
   return betterAuth({
@@ -257,6 +264,8 @@ export function createAuth(deps: AuthDependencies) {
 
     advanced: {
       cookiePrefix: COOKIE_PREFIX,
+      // Tarefas em segundo plano do próprio Better Auth também ficam ligadas ao pedido.
+      ...(deps.background ? { backgroundTasks: { handler: deps.background } } : {}),
       // Secure em produção (HTTPS obrigatório por readServerConfig); local em HTTP.
       useSecureCookies: deps.isProduction,
       defaultCookieAttributes: { httpOnly: true, sameSite: "lax", path: "/" },

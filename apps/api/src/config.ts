@@ -81,6 +81,8 @@ export interface ServerConfig {
   readonly apiRateLimit: ApiRateLimitConfig;
   /** Segundos entre limpezas de rate limiting dentro da API; 0 = desligada. */
   readonly rateLimitPurgeIntervalS: number;
+  /** Segredo da rota do cron; null = rota desligada. */
+  readonly cronSecret: string | null;
 }
 
 function readPositiveInt(env: NodeJS.ProcessEnv, name: string, fallback: number, max: number): number {
@@ -222,9 +224,34 @@ export function readTrustProxy(raw: string | undefined): TrustProxySetting {
  * Configuração completa do servidor. Em produção falha se faltar o que é
  * obrigatório; em desenvolvimento usa valores locais seguros por omissão.
  */
+/**
+ * Onde a API corre:
+ * - "node": processo contínuo (server.ts) que serve também o build da web e faz a
+ *   limpeza de rate limiting com um timer;
+ * - "vercel": Vercel Function (vercel.ts). A web é servida pela CDN da Vercel e a
+ *   limpeza corre por Vercel Cron (rota autenticada com CRON_SECRET).
+ */
+export type ServerPlatform = "node" | "vercel";
+
+export const MIN_CRON_SECRET_LENGTH = 32;
+
+/** Segredo do cron (Authorization: Bearer). Obrigatório na Vercel em produção. */
+export function readCronSecret(env: NodeJS.ProcessEnv, required: boolean): string | null {
+  const raw = env["CRON_SECRET"]?.trim() ?? "";
+  if (raw === "") {
+    if (required) throw new Error("CRON_SECRET é obrigatória na Vercel em produção (rota do cron).");
+    return null;
+  }
+  if (raw.length < MIN_CRON_SECRET_LENGTH) {
+    throw new Error(`CRON_SECRET tem de ter pelo menos ${String(MIN_CRON_SECRET_LENGTH)} caracteres.`);
+  }
+  return raw;
+}
+
 export function readServerConfig(
   env: NodeJS.ProcessEnv = process.env,
   generateSecret: () => string = () => randomBytes(32).toString("base64url"),
+  platform: ServerPlatform = "node",
 ): ServerConfig {
   const nodeEnv = readNodeEnv(env);
   const isProduction = nodeEnv === "production";
@@ -244,6 +271,13 @@ export function readServerConfig(
     throw new Error(`BETTER_AUTH_SECRET tem de ter pelo menos ${MIN_AUTH_SECRET_LENGTH} caracteres.`);
   }
 
+  const trustProxy = readTrustProxy(env["TRUST_PROXY"]);
+  const onVercel = platform === "vercel";
+  // Atrás do proxy da Vercel, sem TRUST_PROXY todos os clientes teriam o mesmo IP
+  // (o do proxy) e partilhariam os limites de rate limiting.
+  if (onVercel && isProduction && trustProxy === false) {
+    throw new Error("TRUST_PROXY é obrigatório na Vercel em produção (ex.: 1).");
+  }
 
   return {
     port,
@@ -253,11 +287,13 @@ export function readServerConfig(
     appOrigin,
     authSecret,
     authSecretIsEphemeral,
-    trustProxy: readTrustProxy(env["TRUST_PROXY"]),
+    trustProxy,
     mail: readMailConfig(env, isProduction),
     passwordBreachCheck: readPasswordBreachCheck(env, isProduction),
-    webDistDir: readWebDistDir(env, isProduction),
+    // Na Vercel a web é servida pela CDN e a limpeza corre por cron, não por timer.
+    webDistDir: onVercel ? null : readWebDistDir(env, isProduction),
     apiRateLimit: readApiRateLimit(env),
-    rateLimitPurgeIntervalS: readRateLimitPurgeIntervalS(env),
+    rateLimitPurgeIntervalS: onVercel ? 0 : readRateLimitPurgeIntervalS(env),
+    cronSecret: readCronSecret(env, onVercel && isProduction),
   };
 }

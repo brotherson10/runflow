@@ -23,3 +23,6 @@ Thumbs.db
 .e2e/
 test-results/
 playwright-report/
+
+# Vercel CLI (ligação local ao projeto e build local)
+.vercel/
