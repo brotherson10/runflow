@@ -240,4 +240,4 @@ parâmetros → 400.
 |---|---|
 | `GET /api/v1/health` | Disponibilidade do processo: `{"status":"ok"}` |
 | `GET /api/v1/me` | Utilizador da sessão: `{id, name, email, timeZone}` |
-| `/api/auth/*` | Better Auth (registo, login, logout, recuperação) — ver README |
+| `/api/auth/*` | Better Auth (registo, login, logout); confirmação e recuperação → 410 `FEATURE_UNAVAILABLE` (D52) — ver README |

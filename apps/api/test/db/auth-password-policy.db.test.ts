@@ -9,8 +9,6 @@ import {
   signedInClient,
   startAuthServer,
   TestClient,
-  tokenFromMail,
-  waitForMail,
   type AuthTestServer,
 } from "./support/auth-harness.ts";
 import { freshMigratedTestDatabase } from "./support/test-database.ts";
@@ -88,7 +86,6 @@ describe("política de palavra-passe (15–128, sem composição) e HIBP", () =>
     expect(res.body.message).toMatch(/Tente novamente/);
     expect(res.text).not.toMatch(/pwnedpasswords|SHA|stack/i);
     expect(await userExists(handle, input.email)).toBe(false);
-    expect(server.mailbox.find(input.email, "email-verification")).toHaveLength(0);
   });
 
   it("login de conta existente não depende do HIBP (nem o consulta)", async () => {
@@ -118,52 +115,6 @@ describe("política de palavra-passe (15–128, sem composição) e HIBP", () =>
     );
     const res = await new TestClient(server.baseUrl).post(`${AUTH}/sign-in/email`, { email, password: "curta-8!" });
     expect(res.status).toBe(200);
-  });
-
-  describe("redefinição: falhas do HIBP não consomem o token", () => {
-    async function resetToken(email: string, count: number): Promise<string> {
-      await new TestClient(server.baseUrl).post(`${AUTH}/request-password-reset`, { email });
-      return tokenFromMail(await waitForMail(server.mailbox, email, "password-reset", count), "/redefinir-senha");
-    }
-
-    it("indisponível (503) e comprometida (400) mantêm o link válido; depois redefine", async () => {
-      const { input } = await signedInClient(server);
-      const token = await resetToken(input.email, 1);
-
-      for (const mode of UNAVAILABLE_MODES) {
-        fakeHibp.mode = mode;
-        const res = await new TestClient(server.baseUrl).post<Problem>(`${AUTH}/reset-password`, {
-          token,
-          newPassword: "nova-palavra-passe-segura-9",
-        });
-        expect(res.status).toBe(503);
-        expect(res.body.code).toBe("PASSWORD_CHECK_UNAVAILABLE");
-      }
-      fakeHibp.mode = "ok";
-      fakeHibp.compromised.set(COMPROMISED, 7);
-      const compromised = await new TestClient(server.baseUrl).post<Problem>(`${AUTH}/reset-password`, {
-        token,
-        newPassword: COMPROMISED,
-      });
-      expect(compromised.status).toBe(400);
-      expect(compromised.body.code).toBe("PASSWORD_COMPROMISED");
-
-      const { rowCount } = await handle.pool.query(`select 1 from verification where identifier = $1`, [
-        `reset-password:${token}`,
-      ]);
-      expect(rowCount).toBe(1);
-
-      const ok = await new TestClient(server.baseUrl).post(`${AUTH}/reset-password`, {
-        token,
-        newPassword: "nova-palavra-passe-segura-9",
-      });
-      expect(ok.status).toBe(200);
-      const login = await new TestClient(server.baseUrl).post(`${AUTH}/sign-in/email`, {
-        email: input.email,
-        password: "nova-palavra-passe-segura-9",
-      });
-      expect(login.status).toBe(200);
-    });
   });
 
   it("troca de palavra-passe: comprometida 400, indisponível 503, válida 200", async () => {

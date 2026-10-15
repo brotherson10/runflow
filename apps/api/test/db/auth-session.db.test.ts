@@ -8,7 +8,6 @@ import {
   startAuthServer,
   TestClient,
   UNTRUSTED_ORIGIN,
-  verifyEmailFromMailbox,
   type AuthTestServer,
 } from "./support/auth-harness.ts";
 import { freshMigratedTestDatabase } from "./support/test-database.ts";
@@ -126,10 +125,7 @@ describe("registo, login, sessão, /me e logout (HTTP + PostgreSQL)", () => {
         first.email,
       ]);
       expect(rowCount).toBe(1);
-      // O registo duplicado não envia outro e-mail de confirmação; a palavra-passe
-      // original continua a ser a válida (depois de confirmar o e-mail).
-      await verifyEmailFromMailbox(new TestClient(server.baseUrl), server.mailbox, first.email);
-      expect(server.mailbox.find(first.email, "email-verification")).toHaveLength(1);
+      // A palavra-passe original continua a ser a válida.
       const login = await new TestClient(server.baseUrl).post(`${AUTH}/sign-in/email`, {
         email: first.email,
         password: first.password,
@@ -175,7 +171,6 @@ describe("registo, login, sessão, /me e logout (HTTP + PostgreSQL)", () => {
       const client = new TestClient(server.baseUrl);
       const input = newUserInput();
       await client.post(`${AUTH}/sign-up/email`, input);
-      await verifyEmailFromMailbox(client, server.mailbox, input.email);
       const res = await client.post(`${AUTH}/sign-in/email`, {
         email: input.email,
         password: input.password,
@@ -253,8 +248,6 @@ describe("registo, login, sessão, /me e logout (HTTP + PostgreSQL)", () => {
 
     it("não permite alterar e-mail, emailVerified nem imagem pelo cliente", async () => {
       const { client, input, userId } = await signedInClient(server);
-      // Volta a "não verificado" (a sessão já existe) para provar que o cliente não o muda.
-      await handle.pool.query(`update "user" set email_verified = false where id = $1`, [userId]);
       const email = await client.post(`${AUTH}/update-user`, { email: "outro@example.test" });
       expect(email.status).toBe(400);
       const verified = await client.post(`${AUTH}/update-user`, { emailVerified: true });
@@ -347,7 +340,6 @@ describe("cookies em configuração de produção", () => {
     const client = new TestClient(server.baseUrl, { origin: "https://runflow.example" });
     const input = newUserInput();
     expect((await client.post(`${AUTH}/sign-up/email`, input)).status).toBe(200);
-    await verifyEmailFromMailbox(client, server.mailbox, input.email, "https://runflow.example");
     const res = await client.post(`${AUTH}/sign-in/email`, {
       email: input.email,
       password: input.password,

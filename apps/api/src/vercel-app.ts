@@ -5,7 +5,7 @@
  * - Um app por instância (Fluid compute reutiliza-a entre pedidos).
  * - Pool pequeno com fecho rápido de clientes inativos e `attachDatabasePool`, que
  *   liberta clientes inativos antes de a instância suspender (recomendação oficial).
- * - `waitUntil`: os envios de e-mail terminam antes de a execução acabar.
+ * - `waitUntil`: tarefas em segundo plano do Better Auth terminam antes de a execução acabar.
  * - As migrations NUNCA correm aqui (passo explícito antes do deploy, D51).
  * - Configuração inválida: falha fechada com 503 (o motivo só fica no log).
  */
@@ -15,7 +15,6 @@ import { createApp } from "./app.ts";
 import { createAuth } from "./auth/auth.ts";
 import { readServerConfig } from "./config.ts";
 import { createDatabase } from "./db/client.ts";
-import { FileMailbox, ResendMailer, type Mailer } from "./mail/mailer.ts";
 import { sendProblem } from "./problem.ts";
 
 /** Ligações por instância: várias instâncias somam-se no pooler do Neon. */
@@ -49,17 +48,11 @@ export function createVercelApp(env: NodeJS.ProcessEnv = process.env): Express {
   });
   attachDatabasePool(database.pool);
 
-  const mailer: Mailer =
-    config.mail.transport === "resend"
-      ? new ResendMailer({ apiKey: config.mail.apiKey, from: config.mail.from, logger: console })
-      : new FileMailbox(config.mail.outboxDir);
-
   const auth = createAuth({
     db: database.db,
     appOrigin: config.appOrigin,
     secret: config.authSecret,
     isProduction: config.isProduction,
-    mailer,
     logger: console,
     passwordBreachCheck: { enabled: config.passwordBreachCheck === "hibp" },
     background: waitUntil,

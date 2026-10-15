@@ -1,9 +1,7 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
 import { expect, test as base, type Page } from "@playwright/test";
-import { MAIL_DIR, WEB_ORIGIN } from "./constants.ts";
+import { WEB_ORIGIN } from "./constants.ts";
 
-export { MAIL_DIR, WEB_ORIGIN };
+export { WEB_ORIGIN };
 export const SCREENSHOT_DIR = process.env["E2E_SCREENSHOT_DIR"] ?? ".e2e/screenshots";
 
 let ipCounter = Math.floor(Math.random() * 200);
@@ -70,18 +68,8 @@ export async function signUp(page: Page, account: Account): Promise<void> {
   await page.getByLabel("E-mail").fill(account.email);
   await page.getByLabel("Palavra-passe").fill(account.password);
   await page.getByRole("button", { name: "Criar conta" }).click();
-  await expect(page).toHaveURL(/\/verificar-email$/);
-  await confirmEmail(page, account.email);
-  await signIn(page, account);
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByRole("heading", { level: 1, name: `Olá, ${account.name}` })).toBeVisible();
-}
-
-/** Abre o link de confirmação do último e-mail capturado e confirma pela interface. */
-export async function confirmEmail(page: Page, email: string): Promise<void> {
-  await page.goto(await waitForMailLink(email, "email-verification", "/confirmar-email"));
-  await page.getByRole("button", { name: "Confirmar e-mail" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "E-mail confirmado" })).toBeVisible();
 }
 
 export async function signIn(page: Page, account: Account, path = "/entrar"): Promise<void> {
@@ -116,72 +104,4 @@ export async function addWorkout(
 /** Valor de uma estatística do painel ("Distância", "Treinos", ...). */
 export function stat(page: Page, label: string) {
   return page.locator(".stat").filter({ has: page.locator("dt", { hasText: label }) }).locator("dd");
-}
-
-
-/** Linhas de cada e-mail capturado para `email` e do tipo indicado, do mais recente ao mais antigo. */
-function mailsFor(email: string, kind: string): string[][] {
-  let files: string[];
-  try {
-    files = readdirSync(MAIL_DIR);
-  } catch {
-    return [];
-  }
-  return files
-    .filter((name) => name.includes(`-${kind}-`))
-    .map((name) => join(MAIL_DIR, name))
-    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
-    .map((file) => readFileSync(file, "utf8").split(/\r?\n/).map((line) => line.trim()))
-    .filter((lines) => lines.includes(`Para: ${email}`));
-}
-
-/** Número de e-mails capturados para `email` e do tipo indicado. */
-export function countMails(email: string, kind: string): number {
-  return mailsFor(email, kind).length;
-}
-
-/**
- * Link do último e-mail capturado localmente para `email` e do tipo indicado. O
- * link é identificado por parsing de URL (origem da app, caminho exato e um único
- * `token`), não por padrões de texto.
- */
-export function readMailLink(email: string, kind: string, pathname: string): string | null {
-  for (const lines of mailsFor(email, kind)) {
-    for (const word of lines.flatMap((line) => line.split(/\s+/))) {
-      const url = URL.parse(word);
-      if (url?.origin !== WEB_ORIGIN || url.pathname !== pathname) continue;
-      if (url.searchParams.getAll("token").length === 1) return url.toString();
-    }
-  }
-  return null;
-}
-
-/**
- * Espera até existirem `count` e-mails (enviados em segundo plano) e devolve o link
- * do mais recente. Conta mensagens, não links distintos: o token de confirmação do
- * Better Auth é um JWT com iat/exp em segundos, por isso dois envios no mesmo
- * segundo têm o mesmo link.
- */
-export async function waitForMailLink(email: string, kind: string, pathname: string, count = 1): Promise<string> {
-  const found: { link: string | null } = { link: null };
-  await expect
-    .poll(
-      () => {
-        found.link = readMailLink(email, kind, pathname);
-        return found.link !== null && countMails(email, kind) >= count;
-      },
-      { message: `e-mail ${kind} para ${email}` },
-    )
-    .toBe(true);
-  if (found.link === null) throw new Error(`Sem e-mail ${kind} para ${email}.`);
-  return found.link;
-}
-
-/** Link de redefinição do último e-mail capturado para `email`. */
-export function readResetLink(email: string): string {
-  const link = readMailLink(email, "password-reset", "/redefinir-senha");
-  if (link === null) throw new Error(`Nenhum e-mail de recuperação para ${email}.`);
-  const token = new URL(link).searchParams.get("token") ?? "";
-  if (!/^[A-Za-z0-9]{16,128}$/.test(token)) throw new Error("Token de recuperação com formato inesperado.");
-  return link;
 }

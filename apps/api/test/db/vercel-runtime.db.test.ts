@@ -7,7 +7,6 @@ import type { DatabaseHandle } from "../../src/db/client.ts";
 import { DEFAULT_PURGE_RETENTION_S } from "../../src/db/rate-limit-purge.ts";
 import { CRON_PURGE_PATH } from "../../src/http/cron.ts";
 import { DEFAULT_API_RATE_LIMIT } from "../../src/http/rate-limit.ts";
-import { AUTH, newUserInput, startAuthServer, TestClient } from "./support/auth-harness.ts";
 import { freshMigratedTestDatabase } from "./support/test-database.ts";
 
 const SECRET = "segredo-do-cron-de-teste-com-mais-de-32-caracteres";
@@ -110,32 +109,3 @@ describe("Vercel Cron: limpeza de rate limiting por rota autenticada", () => {
   });
 });
 
-describe("envios em segundo plano ligados ao pedido (waitUntil na Vercel)", () => {
-  let handle: DatabaseHandle;
-
-  beforeAll(async () => {
-    handle = await freshMigratedTestDatabase();
-  });
-
-  afterAll(async () => {
-    await handle.close();
-  });
-
-  it("o registo entrega o envio do e-mail ao handler, que termina com o e-mail enviado", async () => {
-    const tasks: Promise<unknown>[] = [];
-    const server = await startAuthServer(handle, {
-      background: (task) => {
-        tasks.push(task);
-      },
-    });
-    try {
-      const input = newUserInput();
-      expect((await new TestClient(server.baseUrl).post(`${AUTH}/sign-up/email`, input)).status).toBe(200);
-      expect(tasks.length).toBeGreaterThanOrEqual(1);
-      await Promise.all(tasks);
-      expect(server.mailbox.find(input.email, "email-verification")).toHaveLength(1);
-    } finally {
-      await server.close();
-    }
-  });
-});

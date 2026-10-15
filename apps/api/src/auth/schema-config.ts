@@ -12,7 +12,6 @@
  */
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "../db/schema/index.ts";
-import { MemoryMailbox } from "../mail/mailer.ts";
 import { createAuth } from "./auth.ts";
 
 export const auth = createAuth({
@@ -20,6 +19,5 @@ export const auth = createAuth({
   appOrigin: "http://localhost:5173",
   secret: "schema-generation-only-not-a-real-secret-0000",
   isProduction: false,
-  mailer: new MemoryMailbox(),
   logger: console,
 });

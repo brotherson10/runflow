@@ -39,7 +39,6 @@ describe("readServerConfig", () => {
       authSecret: "gerado-".repeat(8),
       authSecretIsEphemeral: true,
       trustProxy: false,
-      mail: { transport: "local", outboxDir: ".mail-outbox" },
       passwordBreachCheck: "hibp",
       webDistDir: null,
     });
@@ -77,11 +76,6 @@ describe("readServerConfig", () => {
     ["APP_URL com caminho", { DATABASE_URL: DB, APP_URL: "http://localhost:5173/app" }, /só a origem/],
     ["APP_URL inválida", { DATABASE_URL: DB, APP_URL: "ftp://x" }, /APP_URL/],
     ["TRUST_PROXY=true", { DATABASE_URL: DB, TRUST_PROXY: "true" }, /TRUST_PROXY=true/],
-    ["transporte de e-mail desconhecido", { DATABASE_URL: DB, MAIL_TRANSPORT: "smtp" }, /não é suportado/],
-    ["Resend sem chave", { DATABASE_URL: DB, MAIL_TRANSPORT: "resend", MAIL_FROM: "a@b.pt" }, /RESEND_API_KEY/],
-    ["Resend com chave mal formada", { DATABASE_URL: DB, MAIL_TRANSPORT: "resend", RESEND_API_KEY: "sk_123456789", MAIL_FROM: "a@b.pt" }, /RESEND_API_KEY/],
-    ["Resend sem remetente", { DATABASE_URL: DB, MAIL_TRANSPORT: "resend", RESEND_API_KEY: "re_0123456789" }, /MAIL_FROM/],
-    ["remetente com quebra de linha", { DATABASE_URL: DB, MAIL_TRANSPORT: "resend", RESEND_API_KEY: "re_0123456789", MAIL_FROM: "RunFlow <a@b.pt>\nBcc: x@y.pt" }, /MAIL_FROM/],
     ["HIBP com valor inválido", { DATABASE_URL: DB, PASSWORD_BREACH_CHECK: "talvez" }, /PASSWORD_BREACH_CHECK/],
     ["WEB_DIST_DIR relativa", { DATABASE_URL: DB, WEB_DIST_DIR: "apps/web/dist" }, /absoluto/],
   ])("falha com %s", (_label, env, message) => {
@@ -94,29 +88,20 @@ describe("readServerConfig", () => {
       DATABASE_URL: DB,
       BETTER_AUTH_SECRET: SECRET,
       APP_URL: "https://runflow.example",
-      MAIL_TRANSPORT: "resend",
-      RESEND_API_KEY: "re_chave_ficticia_0123456789",
-      MAIL_FROM: "RunFlow <nao-responder@runflow.example>",
     };
 
-    it("configuração completa: Resend, HIBP ligado e build da web por omissão", () => {
+    it("configuração completa sem e-mail: HIBP ligado e build da web por omissão", () => {
       const config = readServerConfig(production);
       expect(config).toMatchObject({
         isProduction: true,
-        mail: { transport: "resend", apiKey: production.RESEND_API_KEY, from: production.MAIL_FROM },
         passwordBreachCheck: "hibp",
         webDistDir: DEFAULT_WEB_DIST_DIR,
       });
     });
 
-    it("os erros de configuração nunca incluem a chave da API", () => {
-      const key = "re_curta";
-      expect(() => readServerConfig({ ...production, RESEND_API_KEY: key })).toThrow(/RESEND_API_KEY/);
-      try {
-        readServerConfig({ ...production, RESEND_API_KEY: key });
-      } catch (error) {
-        expect(String(error)).not.toContain(key);
-      }
+    it("não exige nem lê variáveis de e-mail (projeto demonstrativo sem e-mail)", () => {
+      const config = readServerConfig({ ...production, MAIL_TRANSPORT: "smtp", RESEND_API_KEY: "x" });
+      expect(Object.keys(config)).not.toContain("mail");
     });
 
     it.each([
@@ -124,8 +109,6 @@ describe("readServerConfig", () => {
       ["sem APP_URL", { APP_URL: undefined }, /APP_URL é obrigatória/],
       ["APP_URL em http", { APP_URL: "http://runflow.example" }, /https em produção/],
       ["sem DATABASE_URL", { DATABASE_URL: undefined }, /DATABASE_URL/],
-      ["sem serviço real de e-mail", { MAIL_TRANSPORT: undefined }, /serviço real de e-mail/],
-      ["captura local", { MAIL_TRANSPORT: "local" }, /produção exige MAIL_TRANSPORT=resend/],
       ["HIBP desligado", { PASSWORD_BREACH_CHECK: "off" }, /não é permitido em produção/],
     ])("%s", (_label, override, message) => {
       expect(() => readServerConfig({ ...production, ...override })).toThrow(message);

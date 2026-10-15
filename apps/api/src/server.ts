@@ -5,7 +5,6 @@ import { readServerConfig, type ServerConfig } from "./config.ts";
 import { createDatabase } from "./db/client.ts";
 import { startRateLimitPurge } from "./db/rate-limit-purge.ts";
 import { loadWebBuild, type WebBuild } from "./http/web.ts";
-import { FileMailbox, ResendMailer, type Mailer } from "./mail/mailer.ts";
 
 let config: ServerConfig;
 try {
@@ -33,12 +32,6 @@ if (config.webDistDir !== null) {
   }
 }
 
-// Local: ficheiros (nada sai da máquina). Resend: envio real por HTTPS (produção).
-const mailer: Mailer =
-  config.mail.transport === "resend"
-    ? new ResendMailer({ apiKey: config.mail.apiKey, from: config.mail.from, logger: console })
-    : new FileMailbox(config.mail.outboxDir);
-
 if (config.passwordBreachCheck === "off") {
   console.warn("PASSWORD_BREACH_CHECK=off: palavras-passe comprometidas não são verificadas (só fora de produção).");
 }
@@ -49,7 +42,6 @@ const auth = createAuth({
   appOrigin: config.appOrigin,
   secret: config.authSecret,
   isProduction: config.isProduction,
-  mailer,
   logger: console,
   passwordBreachCheck: { enabled: config.passwordBreachCheck === "hibp" },
 });

@@ -866,6 +866,42 @@ Contrato completo em [api.md](api.md).
 - Detalhes em [deployment.md](deployment.md).
 - **`TRUST_PROXY=1`:** proposta, **não validada** no host real.
 
+## Publicação sem e-mail (Fase 5C)
+
+### D52 — Projeto demonstrativo sem e-mail
+- **Data:** 2026-10-15 · **Estado:** aceite (mudança de escopo autorizada; substitui
+  D47 e D50 e a parte de redefinição de D44 e D48)
+- **Contexto:** a publicação usa só Vercel Hobby e Neon Free, sem Resend, domínio
+  próprio nem DNS. Sem envio de e-mail, não há confirmação de endereço nem
+  recuperação de palavra-passe.
+- **Autenticação:**
+  - `requireEmailVerification: false`; o registo continua sem login automático
+    (resposta igual para e-mails novos e existentes) e a web entra a seguir;
+  - `emailVerified` fica `false` e nunca é marcado artificialmente.
+- **Endpoints que dependem de e-mail** (`/send-verification-email`, `/verify-email`,
+  `/request-password-reset`, `/reset-password`, `/reset-password/:token`,
+  `/change-email`):
+  - a API responde **410** `FEATURE_UNAVAILABLE` com o motivo, antes do Better Auth;
+  - os mesmos caminhos estão também em `disabledPaths` no Better Auth (defesa em
+    profundidade);
+  - pedir recuperação não cria tokens.
+- **Web:**
+  - `/recuperar-acesso`, `/redefinir-senha`, `/verificar-email` e
+    `/confirmar-email` mostram "Funcionalidade indisponível", sem formulários;
+  - o registo e a Conta avisam que o e-mail não é verificado e que não existe
+    recuperação de palavra-passe;
+  - o login deixou de ter o link "Esqueceu-se da palavra-passe?".
+- **Removido:**
+  - o transporte de e-mail (`MailConfig`, `ResendMailer`, `FileMailbox`) e as
+    variáveis `MAIL_*` e `RESEND_API_KEY`;
+  - a produção já não exige serviço de e-mail;
+  - o código anterior está no histórico do Git (até `ecf60c1`) para uma reativação
+    futura.
+- **Preservado:** hashing, política 15–128 com HIBP (registo e troca), sessões,
+  autorização por dono, proteção de origem, rate limiting e cabeçalhos.
+- **Consequência:** sem a regra de 15 min da recuperação, a maior janela de rate
+  limiting passou a ser 60 s (D43 continua a exigir retenção maior).
+
 ### Migration 0001 (`auth_time_zone_rate_limit`)
 - Gerada pelo drizzle-kit e revista à mão **antes** da primeira aplicação. A
   coluna `time_zone NOT NULL` é criada com default temporário `'UTC'` (para
@@ -883,11 +919,11 @@ Contrato completo em [api.md](api.md).
 | Tema | Estado |
 |---|---|
 | Hospedagem | código pronto (D49–D51); por criar: Render, Neon e Resend; por decidir: Render Free ou `0.5c-512mb` (7 USD/mês) |
-| Domínio `runflow.brotherson.dev` | proposto; DNS Cloudflare **não alterado** |
-| Envio real de e-mail | transporte Resend implementado e testado com `fetch` simulado (D50); primeiro envio real controlado por fazer |
+| Domínio `runflow.brotherson.dev` | não usado nesta entrega; URL final https://runflow-eta.vercel.app |
+| Envio de e-mail, verificação e recuperação | **fora do escopo** (D52); reativação possível a partir do histórico |
 | `TRUST_PROXY=1` | **por validar no host real** (`deployment.md`) |
 | Execução das migrations | decidido: passo explícito antes do deploy, sem pre-deploy (D51) |
-| Verificação de e-mail obrigatória | **feito** (D47) |
+| Verificação de e-mail | desativada (D52) |
 | Política de palavra-passe (15–128, HIBP) | **feito** (D48) |
 | Formulário web de troca de palavra-passe | pendente (API pronta e testada, D48) |
 | Erros de hook do Better Auth registados como `ERROR` | aceite; ruído nos logs, sem dados sensíveis (D48) |

@@ -10,14 +10,6 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { isPasswordCompromised } from "better-auth/plugins/haveibeenpwned";
 import type { Database } from "../db/client.ts";
 import * as authSchema from "../db/schema/auth.ts";
-import {
-  emailVerificationLink,
-  emailVerificationMessage,
-  passwordChangedMessage,
-  passwordResetLink,
-  passwordResetMessage,
-  type Mailer,
-} from "../mail/mailer.ts";
 
 export const AUTH_BASE_PATH = "/api/auth";
 /** Cabeçalho interno com o IP do cliente, definido pelo Express (ver client-ip.ts). */
@@ -26,15 +18,26 @@ export const COOKIE_PREFIX = "runflow";
 
 export const SESSION_EXPIRES_IN_S = 7 * 24 * 60 * 60;
 export const SESSION_UPDATE_AGE_S = 24 * 60 * 60;
-export const RESET_TOKEN_EXPIRES_IN_S = 30 * 60;
-export const EMAIL_VERIFICATION_EXPIRES_IN_S = 24 * 60 * 60;
 /** Tempo máximo da consulta HIBP; depois disso o pedido é recusado (tente novamente). */
 export const PASSWORD_CHECK_TIMEOUT_MS = 5000;
+
+/**
+ * Projeto demonstrativo sem envio de e-mail (D52): estes endpoints do Better Auth
+ * dependem de e-mail (confirmação, recuperação, troca de endereço) e estão
+ * desativados. A API responde 410 com uma mensagem clara (auth/http.ts).
+ */
+export const EMAIL_DEPENDENT_PATHS = [
+  "/send-verification-email",
+  "/verify-email",
+  "/request-password-reset",
+  "/reset-password",
+  "/reset-password/:token",
+  "/change-email",
+] as const;
 
 /** Caminhos que definem uma palavra-passe nova, e o campo do corpo que a contém. */
 export const NEW_PASSWORD_FIELDS: Readonly<Record<string, string>> = {
   "/sign-up/email": "password",
-  "/reset-password": "newPassword",
   "/change-password": "newPassword",
 };
 
@@ -45,11 +48,7 @@ export const RATE_LIMIT = {
   customRules: {
     "/sign-in/email": { window: 60, max: 5 },
     "/sign-up/email": { window: 60, max: 5 },
-    "/request-password-reset": { window: 15 * 60, max: 3 },
-    "/reset-password": { window: 60, max: 5 },
     "/change-password": { window: 60, max: 5 },
-    "/send-verification-email": { window: 15 * 60, max: 3 },
-    "/verify-email": { window: 60, max: 10 },
   },
 } as const;
 
@@ -65,7 +64,6 @@ export interface AuthDependencies {
   readonly appOrigin: string;
   readonly secret: string;
   readonly isProduction: boolean;
-  readonly mailer: Mailer;
   readonly logger: AuthLogger;
   /**
    * Verificação de palavras-passe comprometidas (HIBP, k-anonymity). Desligada só
@@ -73,8 +71,8 @@ export interface AuthDependencies {
    */
   readonly passwordBreachCheck?: { readonly enabled: boolean; readonly timeoutMs?: number };
   /**
-   * Prolonga a execução até uma tarefa em segundo plano terminar (na Vercel,
-   * `waitUntil` de @vercel/functions: o e-mail é enviado antes de a função
+   * Prolonga a execução até uma tarefa em segundo plano do Better Auth terminar (na
+   * Vercel, `waitUntil` de @vercel/functions: a tarefa termina antes de a função
    * suspender). Num processo contínuo não é preciso.
    */
   readonly background?: (task: Promise<unknown>) => void;
@@ -151,26 +149,10 @@ async function rejectCompromisedPassword(password: string, timeoutMs: number): P
   }
 }
 
-/** Erros de envio não incluem o conteúdo (que pode ter o link com o token). */
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.name : "erro desconhecido";
-}
-
 export function createAuth(deps: AuthDependencies) {
-  const { mailer, logger } = deps;
-  const resetMinutes = RESET_TOKEN_EXPIRES_IN_S / 60;
-  const verificationHours = EMAIL_VERIFICATION_EXPIRES_IN_S / 3600;
+  const { logger } = deps;
   const breachCheck = deps.passwordBreachCheck ?? { enabled: true };
   const breachTimeoutMs = breachCheck.timeoutMs ?? PASSWORD_CHECK_TIMEOUT_MS;
-
-  // Envio sem `await`: o pedido não espera pelo e-mail (recomendação do Better Auth
-  // contra diferenças de tempo entre contas existentes e inexistentes).
-  const sendInBackground = (send: Promise<void>, kind: string): void => {
-    const task = send.catch((error: unknown) => {
-      logger.error(`Falha ao enviar e-mail (${kind}): ${describeError(error)}`);
-    });
-    deps.background?.(task);
-  };
 
   return betterAuth({
     appName: "RunFlow",
@@ -196,27 +178,14 @@ export function createAuth(deps: AuthDependencies) {
 
     emailAndPassword: {
       enabled: true,
-      // Sem login automático no registo: ativa a proteção contra enumeração de e-mails.
+      // Sem login automático no registo: ativa a proteção contra enumeração de e-mails
+      // (resposta igual para e-mails novos e existentes); a web entra a seguir.
       autoSignIn: false,
-      // Login só depois de confirmar o e-mail (D47). O erro EMAIL_NOT_VERIFIED só
-      // aparece com a palavra-passe correta, por isso não revela contas.
-      requireEmailVerification: true,
+      // Projeto demonstrativo sem e-mail (D52): o endereço NÃO é verificado e fica
+      // com emailVerified = false (nunca marcado artificialmente).
+      requireEmailVerification: false,
       minPasswordLength: LIMITS.passwordLength.min,
       maxPasswordLength: LIMITS.passwordLength.max,
-      resetPasswordTokenExpiresIn: RESET_TOKEN_EXPIRES_IN_S,
-      revokeSessionsOnPasswordReset: true,
-      sendResetPassword: ({ user, token }) => {
-        const link = passwordResetLink(deps.appOrigin, token);
-        sendInBackground(
-          mailer.send(passwordResetMessage(user.email, link, resetMinutes)),
-          "password-reset",
-        );
-        return Promise.resolve();
-      },
-      onPasswordReset: ({ user }) => {
-        sendInBackground(mailer.send(passwordChangedMessage(user.email)), "password-changed");
-        return Promise.resolve();
-      },
       // Resposta a um registo com e-mail já existente: igual à de um registo novo
       // (mesma normalização do nome e sem imagem).
       customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
@@ -228,23 +197,9 @@ export function createAuth(deps: AuthDependencies) {
       }),
     },
 
-    emailVerification: {
-      sendOnSignUp: true,
-      // Reenvio só a pedido explícito (página de confirmação), com rate limiting.
-      sendOnSignIn: false,
-      autoSignInAfterVerification: false,
-      expiresIn: EMAIL_VERIFICATION_EXPIRES_IN_S,
-      // Em segundo plano e sem lançar: no reenvio sem sessão, o Better Auth espera por
-      // esta função; uma falha do transporte revelaria contas por verificar.
-      sendVerificationEmail: ({ user, token }) => {
-        const link = emailVerificationLink(deps.appOrigin, token);
-        sendInBackground(
-          mailer.send(emailVerificationMessage(user.email, link, verificationHours)),
-          "email-verification",
-        );
-        return Promise.resolve();
-      },
-    },
+    // Endpoints que dependem de e-mail: desativados também no Better Auth (defesa em
+    // profundidade; a API responde antes com 410, ver auth/http.ts).
+    disabledPaths: [...EMAIL_DEPENDENT_PATHS],
 
     session: {
       expiresIn: SESSION_EXPIRES_IN_S,

@@ -32,6 +32,7 @@ import {
 } from "../lib/data.ts";
 import { presetPeriod, type PeriodPreset } from "../lib/dates.ts";
 import { formatCivilDate, formatDistance } from "../lib/format.ts";
+import { NO_EMAIL_NOTICE } from "../lib/no-email.ts";
 import { userKeys } from "../lib/query.ts";
 import { useSingleFlight } from "../lib/single-flight.ts";
 import { useSessionActions } from "../lib/session.ts";
@@ -505,6 +506,7 @@ export function AccountPage() {
   return (
     <section className="narrow">
       <PageTitle>Conta</PageTitle>
+      <p className="notice">{NO_EMAIL_NOTICE}</p>
       <form className="form" onSubmit={(event) => void submit(event)} noValidate>
         <FormError message={error} />
         <Field label="Nome" name="name" autoComplete="name" required maxLength={120} value={name} onChange={(e) => { setName(e.target.value); }} />

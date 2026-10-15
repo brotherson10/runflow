@@ -2,14 +2,12 @@ import {
   addWorkout,
   expect,
   newAccount,
-  readResetLink,
   signIn,
   signOut,
   signUp,
   stat,
   test,
 } from "./support.ts";
-import { E2E_COMPROMISED_PASSWORD, E2E_HIBP_FAILING_PASSWORD } from "./constants.ts";
 
 test.afterEach(({ consoleErrors }, testInfo) => {
   // Testes que simulam falhas de rede/sessão anotam os erros esperados.
@@ -219,58 +217,4 @@ test("objetivo: criar, editar, concluir e substituir com confirmação", async (
 
   await page.getByRole("link", { name: "Painel" }).click();
   await expect(page.locator(".goal-card")).toContainText("Maratona");
-});
-
-test("recuperação local: pedido neutro, política de palavra-passe, link não consumido e login", async ({ page }, testInfo) => {
-  // 400 (comprometida) e 503 (HIBP indisponível) são respostas esperadas.
-  testInfo.annotations.push({ type: "allow-console", description: "status of 400" }, { type: "allow-console", description: "status of 503" });
-  const account = newAccount("Recupera");
-  await signUp(page, account);
-  await signOut(page);
-
-  await page.getByRole("link", { name: "Esqueceu-se da palavra-passe?" }).click();
-  await page.getByLabel("E-mail da conta").fill(account.email);
-  await page.getByRole("button", { name: "Enviar link" }).click();
-  await expect(page.getByText("Se existir uma conta com esse e-mail")).toBeVisible();
-
-  let link = "";
-  await expect.poll(() => {
-    try {
-      link = readResetLink(account.email);
-      return true;
-    } catch {
-      return false;
-    }
-  }).toBe(true);
-  await page.goto(link);
-  await expect(page).toHaveURL(/\/redefinir-senha$/); // token retirado da barra de endereço
-
-  // Política: curta (validação local), comprometida (HIBP) e HIBP indisponível. Nenhuma
-  // destas tentativas consome o link: a seguir, o mesmo link redefine a palavra-passe.
-  const attempts: [string, string][] = [
-    ["catorze-chars!", "Use pelo menos 15 caracteres."],
-    [E2E_COMPROMISED_PASSWORD, "aparece em fugas de dados conhecidas"],
-    [E2E_HIBP_FAILING_PASSWORD, "Tente novamente dentro de alguns minutos"],
-  ];
-  for (const [password, message] of attempts) {
-    await page.getByLabel("Nova palavra-passe").fill(password);
-    await page.getByLabel("Confirmar palavra-passe").fill(password);
-    await page.getByRole("button", { name: "Guardar palavra-passe" }).click();
-    await expect(page.getByRole("alert")).toContainText(message);
-  }
-
-  const newPassword = "nova-palavra-passe-e2e-9";
-  await page.getByLabel("Nova palavra-passe").fill(newPassword);
-  await page.getByLabel("Confirmar palavra-passe").fill(newPassword);
-  await page.getByRole("button", { name: "Guardar palavra-passe" }).click();
-  await expect(page).toHaveURL(/\/entrar\?redefinida=1$/);
-  await expect(page.getByText("Palavra-passe alterada.")).toBeVisible();
-
-  await page.getByLabel("E-mail").fill(account.email);
-  await page.getByLabel("Palavra-passe").fill(account.password);
-  await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page.getByRole("alert")).toContainText("E-mail ou palavra-passe incorretos.");
-
-  await signIn(page, { ...account, password: newPassword });
-  await expect(page).toHaveURL(/\/app$/);
 });

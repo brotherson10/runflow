@@ -1,12 +1,10 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { RESET_TOKEN_EXPIRES_IN_S, SESSION_EXPIRES_IN_S } from "../../src/auth/auth.ts";
+import { SESSION_EXPIRES_IN_S } from "../../src/auth/auth.ts";
 import type { DatabaseHandle } from "../../src/db/client.ts";
 import {
   AUTH,
-  flushBackground,
   signedInClient,
   startAuthServer,
-  TestClient,
   type AuthTestServer,
 } from "./support/auth-harness.ts";
 import { freshMigratedTestDatabase } from "./support/test-database.ts";
@@ -71,28 +69,20 @@ describe("Better Auth com TIMESTAMPTZ", () => {
     expect((await client.get("/api/v1/me")).status).toBe(200);
   });
 
-  it("createdAt do utilizador e expiração do token de recuperação são instantes corretos", async () => {
+  it("createdAt do utilizador é um instante correto, independente do TZ do processo", async () => {
     process.env["TZ"] = "America/Los_Angeles";
     const before = Date.now();
     const { input } = await signedInClient(server);
-    await new TestClient(server.baseUrl).post(`${AUTH}/request-password-reset`, { email: input.email });
-    await flushBackground();
     const after = Date.now();
 
     process.env["TZ"] = "Pacific/Kiritimati";
-    const { rows } = await handle.pool.query<{ created: string; reset_expires: string }>(
-      `select extract(epoch from u.created_at)::text as created,
-              extract(epoch from v.expires_at)::text as reset_expires
-         from "user" u join verification v on v.value = u.id
-        where u.email = $1`,
+    const { rows } = await handle.pool.query<{ created: string }>(
+      `select extract(epoch from u.created_at)::text as created from "user" u where u.email = $1`,
       [input.email],
     );
     const created = Number(rows[0]?.created) * 1000;
     expect(created).toBeGreaterThanOrEqual(before - 1000);
     expect(created).toBeLessThanOrEqual(after + 1000);
-    const resetExpires = Number(rows[0]?.reset_expires) * 1000;
-    expect(resetExpires).toBeGreaterThanOrEqual(before + RESET_TOKEN_EXPIRES_IN_S * 1000 - 1000);
-    expect(resetExpires).toBeLessThanOrEqual(after + RESET_TOKEN_EXPIRES_IN_S * 1000 + 1000);
   });
 
   it("uma sessão expirada na base (TIMESTAMPTZ no passado) deixa de ser aceite", async () => {

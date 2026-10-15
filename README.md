@@ -25,29 +25,26 @@ Já existe:
 - API Express 5 com `GET /api/v1/health` e erros em `application/problem+json`;
 - PostgreSQL local em Docker, schema Drizzle e migrations SQL versionadas;
 - **autenticação na API** (Better Auth): registo, login, sessão, logout,
-  recuperação e redefinição de palavra-passe, `GET /api/v1/me` protegido e rate
-  limiting persistente. Testada por HTTP contra PostgreSQL real;
+  `GET /api/v1/me` protegido e rate limiting persistente. Testada por HTTP contra PostgreSQL real;
 - **API de treinos** (`/api/v1/workouts`): criar, listar com filtros e paginação por
   cursor, ler, alterar e eliminar, com isolamento entre utilizadores, proteção de
   origem nas escritas e rate limiting persistente. Contrato em [docs/api.md](docs/api.md);
 - **API de objetivos** (um ativo por utilizador; editar, concluir, substituir em
   transação) e **dashboard** do período (totais e ritmo médio calculados na leitura);
-- **web em React** (PT-PT, mobile-first): landing, registo, login, recuperação e
-  redefinição de palavra-passe, painel do período, histórico com filtros e
+- **web em React** (PT-PT, mobile-first): landing, registo, login, painel do período, histórico com filtros e
   paginação, registo/edição/eliminação de treinos, objetivo (criar, editar,
   concluir, substituir) e conta (nome e fuso horário);
 - **demo** em `/demo` com dados fictícios locais, só de leitura e sem pedidos à API;
 - **bundle dividido por rota** (autenticação, área privada e demo em chunks próprios),
   limpeza periódica dos registos de rate limiting e E2E no CI;
-- **verificação de e-mail obrigatória** (confirmação e reenvio na web, respostas
-  neutras, rate limiting) e **palavra-passe de 15–128 caracteres** verificada no
-  Have I Been Pwned (falha fechada: se a consulta falhar, tente novamente);
+- **palavra-passe de 15–128 caracteres** verificada no Have I Been Pwned (falha
+  fechada: se a consulta falhar, tente novamente);
 - **Express serve o build da web e a API na mesma origem**, com CSP e restantes
-  cabeçalhos de segurança, e **transporte de e-mail Resend** (HTTPS) para produção.
+  cabeçalhos de segurança (servidor Node) ou **Vercel Function + CDN** (produção).
 
-**Ainda não existem** hospedagem, DNS nem deploy, e nunca foi enviado um e-mail real: em
-desenvolvimento e nos testes os e-mails são **capturados localmente** e o HIBP e a
-Resend são simulados. Comandos de publicação, rollback e bloqueios em
+**Sem e-mail (projeto demonstrativo, D52):** o e-mail não é verificado e não existe
+recuperação de palavra-passe. As rotas antigas de confirmação e recuperação mostram
+indisponibilidade (web) e respondem 410 `FEATURE_UNAVAILABLE` (API). Publicação em
 [docs/deployment.md](docs/deployment.md).
 
 ## Stack
@@ -57,9 +54,9 @@ Resend são simulados. Comandos de publicação, rollback e bloqueios em
 | Linguagem | TypeScript 6 (strict), Node.js 24, npm workspaces |
 | Web | React 19, React Router 8, TanStack Query 5, Vite 8 (CSS próprio, PT-PT, mobile-first) |
 | API | Express 5, Zod 4, erros `application/problem+json` |
-| Autenticação | Better Auth 1.7 (e-mail e palavra-passe, verificação de e-mail, HIBP) |
+| Autenticação | Better Auth 1.7 (e-mail e palavra-passe, HIBP; sem verificação de e-mail) |
 | Base de dados | PostgreSQL 18, Drizzle ORM e migrations SQL versionadas |
-| E-mail | captura local (desenvolvimento) e Resend por HTTPS (produção) |
+| Hospedagem | Vercel Hobby (Function + CDN) e Neon Free (PostgreSQL, Frankfurt) |
 | Testes | Vitest (unitários e PostgreSQL real), Playwright + axe-core (E2E e acessibilidade) |
 | CI | GitHub Actions (lint, typecheck, testes, build, base de dados e E2E) |
 
@@ -124,16 +121,13 @@ desenvolvimento, a web chega lá pela mesma origem do Vite (`http://localhost:51
 
 | Ação | Pedido |
 |---|---|
-| Registo | `POST /api/auth/sign-up/email` com `{ name, email, password, timeZone }` (não inicia sessão; envia o e-mail de confirmação) |
-| Confirmar e-mail | `GET /api/auth/verify-email?token=…` (token do link; sem login automático) |
-| Reenviar confirmação | `POST /api/auth/send-verification-email` com `{ email }` (resposta sempre igual; 3 por 15 min por IP) |
-| Login | `POST /api/auth/sign-in/email` com `{ email, password }` (403 `EMAIL_NOT_VERIFIED` se o e-mail não estiver confirmado) |
+| Registo | `POST /api/auth/sign-up/email` com `{ name, email, password, timeZone }` (não inicia sessão; resposta igual para e-mails novos e existentes) |
+| Login | `POST /api/auth/sign-in/email` com `{ email, password }` |
 | Trocar palavra-passe | `POST /api/auth/change-password` com `{ currentPassword, newPassword }` |
 | Sessão | `GET /api/auth/get-session` |
 | Perfil | `POST /api/auth/update-user` com `{ name?, timeZone? }` |
 | Logout | `POST /api/auth/sign-out` |
-| Pedir recuperação | `POST /api/auth/request-password-reset` com `{ email }` (resposta sempre igual) |
-| Redefinir | `POST /api/auth/reset-password` com `{ token, newPassword }` (revoga sessões, sem login automático) |
+| Confirmação, reenvio, recuperação e redefinição | **410** `FEATURE_UNAVAILABLE` (sem e-mail, D52) |
 | Utilizador atual | `GET /api/v1/me`: `{ id, name, email, timeZone }`; sem sessão dá 401 em problem+json |
 
 - **Origem:** os pedidos com cookie têm de trazer `Origin` igual a `APP_URL`; outra
@@ -144,14 +138,12 @@ desenvolvimento, a web chega lá pela mesma origem do Vite (`http://localhost:51
   - **Produção:** `NODE_ENV=production` exige `APP_URL` em https e o cookie passa a
     `__Secure-runflow.session_token`, com `Secure`.
 - **Palavra-passe:** 15–128 caracteres, sem regras de composição. No registo,
-  redefinição e troca é verificada no Have I Been Pwned (só 5 caracteres do SHA-1
+  e na troca é verificada no Have I Been Pwned (só 5 caracteres do SHA-1
   saem do servidor): comprometida dá 400 `PASSWORD_COMPROMISED`; se a consulta falhar
-  ou demorar mais de 5 s, 503 `PASSWORD_CHECK_UNAVAILABLE`, sem criar conta nem
-  consumir o token de recuperação. O login nunca consulta o HIBP.
-- **E-mails:** `MAIL_TRANSPORT=local` (desenvolvimento) guarda-os em
-  `apps/api/.mail-outbox/` (um `.txt` por mensagem, ignorado pelo Git);
-  `MAIL_TRANSPORT=resend` (produção) envia pela API HTTPS da Resend. Os links
-  apontam para `APP_URL/confirmar-email?token=…` e `APP_URL/redefinir-senha?token=…`.
+  ou demorar mais de 5 s, 503 `PASSWORD_CHECK_UNAVAILABLE`, sem criar conta. O login
+  nunca consulta o HIBP.
+- **E-mail:** não é verificado nem enviado; o campo `emailVerified` fica `false`
+  (nunca marcado artificialmente).
 - **Rate limiting:** guardado na base (tabela `rate_limit`), por IP do cliente.
   - O IP vem do Express (`TRUST_PROXY`); um `X-Forwarded-For` enviado pelo próprio
     cliente é ignorado.
@@ -199,7 +191,6 @@ Para correr a API compilada: `npm run build` e depois `npm run start --workspace
 apps/
   api/        Express 5 + TypeScript (app.ts separado do arranque em server.ts)
     src/auth/   configuração do Better Auth e ligação ao Express (requireSession)
-    src/mail/   interface Mailer e captura local de e-mails
     src/http/   middlewares de domínio (origem, rate limiting, validação, JSON)
     src/workouts/ rotas, repositório (filtrado por dono) e cursor de treinos
     src/goals/  objetivos (um ativo, transições em transação)
@@ -222,8 +213,8 @@ compose.yaml  PostgreSQL local do RunFlow
 
 ## Web
 
-- **Rotas:** `/`, `/entrar`, `/criar-conta`, `/verificar-email`, `/confirmar-email`,
-  `/recuperar-acesso`, `/redefinir-senha`;
+- **Rotas:** `/`, `/entrar`, `/criar-conta`; `/recuperar-acesso`, `/redefinir-senha`,
+  `/verificar-email` e `/confirmar-email` mostram que a funcionalidade está indisponível;
   área pessoal `/app` (painel), `/app/treinos`, `/app/treinos/novo`,
   `/app/treinos/:id/editar`, `/app/objetivo`, `/app/conta`; demo `/demo`,
   `/demo/treinos`, `/demo/objetivo`.
@@ -233,11 +224,11 @@ compose.yaml  PostgreSQL local do RunFlow
 - **Carregamento:** a landing está no ficheiro de entrada; autenticação, área privada
   e demo são chunks `lazy` (D41). A demo nunca descarrega o cliente Better Auth.
 - **Autenticação:** cliente oficial do Better Auth, na mesma origem (`/api/auth`). O
-  e-mail de recuperação é capturado em `apps/api/.mail-outbox/` (local); o link abre
-  `/redefinir-senha`, que retira o token da barra de endereço.
+  registo entra logo a seguir; o registo e a Conta avisam que não há verificação de
+  e-mail nem recuperação de palavra-passe.
 - **Segurança na interface:** conteúdo renderizado como texto, envio duplicado
-  bloqueado, `?next=` validado por parsing de URL (só `/app…` após normalização), token
-  de redefinição validado com `URLSearchParams` e `Referrer-Policy: no-referrer`.
+  bloqueado, `?next=` validado por parsing de URL (só `/app…` após normalização) e
+  `Referrer-Policy: no-referrer`.
 - **Cabeçalhos:** a CSP e os restantes headers de `packages/shared/src/security-headers.ts`
   são enviados pelo Express (produção e E2E) e pelo `vite preview`.
 - **E2E:** `npm run test:e2e` constrói a web e arranca o **Express** em localhost:4173 a

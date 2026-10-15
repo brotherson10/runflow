@@ -73,7 +73,6 @@ export interface ServerConfig {
   /** `true` quando o segredo foi gerado em memória (só em desenvolvimento). */
   readonly authSecretIsEphemeral: boolean;
   readonly trustProxy: TrustProxySetting;
-  readonly mail: MailConfig;
   /** Verificação de palavras-passe comprometidas (HIBP). "off" só fora de produção. */
   readonly passwordBreachCheck: PasswordBreachCheck;
   /** Pasta absoluta do build da web servida pelo Express, ou null (não serve a web). */
@@ -103,7 +102,6 @@ export function readApiRateLimit(env: NodeJS.ProcessEnv): ApiRateLimitConfig {
   };
 }
 
-
 export const DEFAULT_RATE_LIMIT_PURGE_INTERVAL_S = 3600;
 
 /**
@@ -117,9 +115,6 @@ export function readRateLimitPurgeIntervalS(env: NodeJS.ProcessEnv): number {
   if (value < 60) throw new Error("RATE_LIMIT_PURGE_INTERVAL_S tem de ser 0 (desligado) ou um inteiro entre 60 e 86400.");
   return value;
 }
-export type MailConfig =
-  | { readonly transport: "local"; readonly outboxDir: string }
-  | { readonly transport: "resend"; readonly apiKey: string; readonly from: string };
 
 export type PasswordBreachCheck = "hibp" | "off";
 
@@ -128,36 +123,6 @@ export type PasswordBreachCheck = "hibp" | "off";
  * apps/api): não depende da pasta de onde o processo é arrancado.
  */
 export const DEFAULT_WEB_DIST_DIR = fileURLToPath(new URL("../../web/dist", import.meta.url));
-
-const RESEND_KEY_PATTERN = /^re_[A-Za-z0-9_-]{8,}$/;
-// "Nome <local@dominio>" ou "local@dominio"; sem quebras de linha (injeção de cabeçalhos).
-const MAIL_FROM_PATTERN =
-  /^(?:[^<>\r\n"]{1,64} <[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>|[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)$/;
-
-/** E-mail: "local" (ficheiros) fora de produção; "resend" obrigatório em produção. */
-export function readMailConfig(env: NodeJS.ProcessEnv, isProduction: boolean): MailConfig {
-  const transport = env["MAIL_TRANSPORT"]?.trim() || (isProduction ? "" : "local");
-  if (transport === "local") {
-    if (isProduction) {
-      throw new Error("MAIL_TRANSPORT=local só captura e-mails localmente; produção exige MAIL_TRANSPORT=resend (serviço real de e-mail).");
-    }
-    return { transport, outboxDir: env["MAIL_OUTBOX_DIR"]?.trim() || DEFAULT_MAIL_OUTBOX_DIR };
-  }
-  if (transport === "resend") {
-    // As mensagens nunca incluem o valor da chave.
-    const apiKey = env["RESEND_API_KEY"]?.trim() ?? "";
-    if (!RESEND_KEY_PATTERN.test(apiKey)) {
-      throw new Error("RESEND_API_KEY em falta ou com formato inválido (esperado: re_…).");
-    }
-    const from = env["MAIL_FROM"]?.trim() ?? "";
-    if (!MAIL_FROM_PATTERN.test(from)) {
-      throw new Error('MAIL_FROM em falta ou inválido (ex.: "RunFlow <nao-responder@runflow.brotherson.dev>").');
-    }
-    return { transport, apiKey, from };
-  }
-  if (transport === "") throw new Error("Produção exige um serviço real de e-mail: defina MAIL_TRANSPORT=resend.");
-  throw new Error(`MAIL_TRANSPORT "${transport}" não é suportado (use local ou resend).`);
-}
 
 export function readPasswordBreachCheck(env: NodeJS.ProcessEnv, isProduction: boolean): PasswordBreachCheck {
   const raw = env["PASSWORD_BREACH_CHECK"]?.trim() || "hibp";
@@ -179,7 +144,6 @@ export function readWebDistDir(env: NodeJS.ProcessEnv, isProduction: boolean): s
 }
 
 export const DEFAULT_APP_ORIGIN = "http://localhost:5173";
-export const DEFAULT_MAIL_OUTBOX_DIR = ".mail-outbox";
 export const MIN_AUTH_SECRET_LENGTH = 32;
 
 function readNodeEnv(env: NodeJS.ProcessEnv): NodeEnvironment {
@@ -288,7 +252,6 @@ export function readServerConfig(
     authSecret,
     authSecretIsEphemeral,
     trustProxy,
-    mail: readMailConfig(env, isProduction),
     passwordBreachCheck: readPasswordBreachCheck(env, isProduction),
     // Na Vercel a web é servida pela CDN e a limpeza corre por cron, não por timer.
     webDistDir: onVercel ? null : readWebDistDir(env, isProduction),

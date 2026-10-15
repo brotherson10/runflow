@@ -92,9 +92,6 @@ describe("configuração na Vercel", () => {
     DATABASE_URL: "postgres://u:p@db.example.test:5432/neondb",
     BETTER_AUTH_SECRET: "s".repeat(40),
     APP_URL: "https://runflow.example",
-    MAIL_TRANSPORT: "resend",
-    RESEND_API_KEY: "re_chave_ficticia_0123456789",
-    MAIL_FROM: "RunFlow <nao-responder@runflow.example>",
     TRUST_PROXY: "1",
     CRON_SECRET: "c".repeat(40),
   };
@@ -125,7 +122,7 @@ describe("configuração na Vercel", () => {
       errors.push(args.map(String).join(" "));
     });
     try {
-      const app = createVercelApp({ ...production, RESEND_API_KEY: "nao-e-uma-chave-re" });
+      const app = createVercelApp({ ...production, CRON_SECRET: "segredo-curto-nao-revelar" });
       const server = createServer(app);
       await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
       const { port } = server.address() as AddressInfo;
@@ -134,12 +131,12 @@ describe("configuração na Vercel", () => {
       await new Promise<void>((resolve) => server.close(() => { resolve(); }));
       expect(res.status).toBe(503);
       expect(res.headers.get("content-type")).toMatch(/problem\+json/);
-      expect(text).not.toMatch(/RESEND|chave|secret/i);
+      expect(text).not.toMatch(/CRON|segredo|secret/i);
     } finally {
       spy.mockRestore();
     }
-    expect(errors.join("\n")).toMatch(/RESEND_API_KEY/);
-    expect(errors.join("\n")).not.toContain("nao-e-uma-chave-re");
+    expect(errors.join("\n")).toMatch(/CRON_SECRET/);
+    expect(errors.join("\n")).not.toContain("segredo-curto-nao-revelar");
     expect(errors.join("\n")).not.toContain(production.BETTER_AUTH_SECRET);
   });
 });

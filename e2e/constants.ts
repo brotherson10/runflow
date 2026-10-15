@@ -1,6 +1,5 @@
 /** Constantes partilhadas por playwright.config.ts e pelos testes (sem importar fixtures). */
 export const WEB_ORIGIN = "http://localhost:4173";
-export const MAIL_DIR = ".e2e/mail";
 
 /**
  * Palavras-passe fictícias reconhecidas pelo HIBP simulado da API dos E2E

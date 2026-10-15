@@ -5,10 +5,27 @@
 import type { Express, RequestHandler } from "express";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { sendProblem } from "../problem.ts";
-import { AUTH_BASE_PATH, CLIENT_IP_HEADER, type RunflowAuth } from "./auth.ts";
+import { AUTH_BASE_PATH, CLIENT_IP_HEADER, EMAIL_DEPENDENT_PATHS, type RunflowAuth } from "./auth.ts";
 
 /** Limite do corpo dos pedidos de autenticação (o handler lê o stream diretamente). */
 export const AUTH_BODY_LIMIT_BYTES = 16 * 1024;
+
+export const EMAIL_FEATURES_UNAVAILABLE_MESSAGE =
+  "Indisponível neste projeto demonstrativo: não há envio de e-mail, por isso o e-mail não é verificado e não existe recuperação de palavra-passe.";
+
+const EMAIL_DEPENDENT_PATTERNS = EMAIL_DEPENDENT_PATHS.map(
+  (path) => new RegExp(`^${path.replace(":token", "[^/]+")}/?$`, "i"),
+);
+
+/** Endpoints que dependem de e-mail: 410 com motivo claro, antes do Better Auth (D52). */
+export const emailFeaturesUnavailable: RequestHandler = (req, res, next) => {
+  if (!EMAIL_DEPENDENT_PATTERNS.some((pattern) => pattern.test(req.path))) {
+    next();
+    return;
+  }
+  res.setHeader("Cache-Control", "no-store");
+  sendProblem(res, 410, "FEATURE_UNAVAILABLE", EMAIL_FEATURES_UNAVAILABLE_MESSAGE);
+};
 
 /**
  * Substitui qualquer valor enviado pelo cliente no cabeçalho interno pelo
@@ -58,7 +75,7 @@ export const standardRetryAfter: RequestHandler = (_req, res, next) => {
 
 /** Monta o Better Auth em /api/auth, antes de qualquer parser JSON. */
 export function mountAuth(app: Express, auth: RunflowAuth): void {
-  app.use(AUTH_BASE_PATH, clientIpHeader, authBodyLimit, standardRetryAfter);
+  app.use(AUTH_BASE_PATH, clientIpHeader, authBodyLimit, standardRetryAfter, emailFeaturesUnavailable);
   // Express 5: o wildcard tem de ter nome (documentação do Better Auth para Express).
   app.all(`${AUTH_BASE_PATH}/*splat`, toNodeHandler(auth));
 }

@@ -8,12 +8,12 @@
  * - TRUST_PROXY=loopback: o browser liga-se por loopback e cada teste simula um
  *   cliente com IP próprio via X-Forwarded-For, para que os limites de rate
  *   limiting se apliquem por cliente sem serem desligados.
- * - E-mails capturados localmente em .e2e/mail (nada é enviado).
+ * - Sem e-mail (projeto demonstrativo, D52): o registo entra diretamente.
  * - HIBP simulado e rede externa bloqueada na API (e2e/fake-network-preload.ts).
  */
 import { resolve } from "node:path";
 import { defineConfig } from "@playwright/test";
-import { MAIL_DIR, WEB_ORIGIN } from "./e2e/constants.ts";
+import { WEB_ORIGIN } from "./e2e/constants.ts";
 
 const CI = process.env["CI"] === "true";
 const DB_URL =
@@ -63,8 +63,6 @@ export default defineConfig({
       APP_URL: WEB_ORIGIN,
       BETTER_AUTH_SECRET: "runflow-e2e-secret-local-only-0123456789abcdef",
       TRUST_PROXY: "loopback",
-      MAIL_TRANSPORT: "local",
-      MAIL_OUTBOX_DIR: MAIL_DIR,
       PASSWORD_BREACH_CHECK: "hibp",
       WEB_DIST_DIR,
     },

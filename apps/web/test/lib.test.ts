@@ -13,7 +13,6 @@ import {
 } from "../src/lib/format.ts";
 import { DEFAULT_AFTER_LOGIN, safeNextPath } from "../src/lib/redirect.ts";
 import { passwordLengthError } from "../src/lib/password.ts";
-import { readResetToken, readVerificationToken } from "../src/lib/reset-token.ts";
 
 describe("formatação PT-PT", () => {
   it("distância em km", () => {
@@ -136,49 +135,6 @@ describe("safeNextPath (open redirect, por parsing de URL)", () => {
     `/app/${"x".repeat(600)}`,
   ])("recusa %j", (path) => {
     expect(safeNextPath(path)).toBe(DEFAULT_AFTER_LOGIN);
-  });
-});
-
-describe("readResetToken (URLSearchParams + formato)", () => {
-  const valid = "AbCdEfGhIjKlMnOpQrStUv12";
-  it("aceita o token alfanumérico gerado pelo Better Auth", () => {
-    expect(readResetToken(`?token=${valid}`)).toBe(valid);
-    expect(readResetToken(new URLSearchParams({ token: valid, other: "1" }))).toBe(valid);
-  });
-
-  it.each([
-    "",
-    "?",
-    "?token=",
-    "?token=curto",
-    `?token=${valid}&token=${valid}`,
-    `?token=${valid}%00`,
-    `?token=${valid}%2F..`,
-    `?token=${valid}<script>`,
-    `?token=${"a".repeat(129)}`,
-    `?tok=${valid}`,
-  ])("recusa %j", (search) => {
-    expect(readResetToken(search)).toBeNull();
-  });
-});
-
-describe("readVerificationToken (JWT do link de confirmação)", () => {
-  const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImFAYi5wdCJ9.c2lnbmF0dXJlLWJhc2U2NHVybA";
-  it("aceita um JWT com três segmentos base64url", () => {
-    expect(readVerificationToken(`?token=${jwt}`)).toBe(jwt);
-  });
-
-  it.each([
-    "",
-    "?token=",
-    "?token=abc",
-    "?token=a.b",
-    `?token=${jwt}&token=${jwt}`,
-    `?token=${jwt}.extra`,
-    `?token=${jwt}%3Cscript%3E`,
-    `?token=${"a".repeat(1100)}.${"b".repeat(1000)}.c`,
-  ])("recusa %j", (search) => {
-    expect(readVerificationToken(search)).toBeNull();
   });
 });
 

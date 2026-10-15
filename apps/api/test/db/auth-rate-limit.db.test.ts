@@ -11,7 +11,6 @@ import {
 import { freshMigratedTestDatabase } from "./support/test-database.ts";
 
 const SIGN_IN_MAX = RATE_LIMIT.customRules["/sign-in/email"].max;
-const RESET_MAX = RATE_LIMIT.customRules["/request-password-reset"].max;
 const badLogin = { email: "ninguem@example.test", password: "palavra-errada-123" };
 
 async function exhaustSignIn(client: TestClient): Promise<number[]> {
@@ -79,18 +78,6 @@ describe("rate limiting persistente (HTTP + PostgreSQL)", () => {
       expect(first.at(-1)).toBe(429);
       const other = new TestClient(server.baseUrl, { forwardedFor: nextClientIp() });
       expect((await other.post(`${AUTH}/sign-in/email`, badLogin)).status).toBe(401);
-    });
-
-    it(`recuperação: ${String(RESET_MAX)} pedidos e depois 429`, async () => {
-      const client = new TestClient(server.baseUrl);
-      const statuses: number[] = [];
-      for (let attempt = 0; attempt <= RESET_MAX; attempt++) {
-        statuses.push(
-          (await client.post(`${AUTH}/request-password-reset`, { email: "x@example.test" })).status,
-        );
-      }
-      expect(statuses.slice(0, RESET_MAX)).toEqual(Array(RESET_MAX).fill(200));
-      expect(statuses.at(-1)).toBe(429);
     });
 
     it("o estado do limite fica na base de dados e sobrevive a um reinício da API", async () => {

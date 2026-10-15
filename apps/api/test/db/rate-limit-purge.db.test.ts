@@ -104,7 +104,8 @@ describe("limpeza de registos expirados de rate limiting", () => {
   it("recusa retenção que não exceda a maior janela e limites de lote inválidos, sem apagar nada", async () => {
     await seed(handle, "old-", 2, EXPIRED_MS);
     const longest = longestRateLimitWindowS(DEFAULT_API_RATE_LIMIT);
-    expect(longest).toBe(15 * 60);
+    // Sem as rotas de e-mail (D52), a maior janela é a de 60 s.
+    expect(longest).toBe(60);
     const longerApi = { read: { windowS: 7200, max: 1 }, write: { windowS: 60, max: 1 } };
     expect(longestRateLimitWindowS(longerApi)).toBe(7200);
 

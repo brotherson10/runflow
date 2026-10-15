@@ -35,11 +35,9 @@ const AUTH_MESSAGES: Record<string, string> = {
   PASSWORD_COMPROMISED: "Esta palavra-passe aparece em fugas de dados conhecidas. Escolha outra.",
   PASSWORD_CHECK_UNAVAILABLE:
     "Não foi possível verificar a palavra-passe agora. Tente novamente dentro de alguns minutos.",
-  EMAIL_NOT_VERIFIED: "Confirme o seu e-mail antes de entrar. Use o link que lhe enviámos ou peça um novo.",
   INVALID_EMAIL: "Indique um e-mail válido.",
   INVALID_NAME: "Indique um nome válido (até 60 caracteres).",
   INVALID_TIME_ZONE: "Fuso horário inválido.",
-  INVALID_TOKEN: "O link de recuperação é inválido ou expirou. Peça um novo.",
   INVALID_ORIGIN: "Pedido recusado por segurança. Recarregue a página.",
 };
 

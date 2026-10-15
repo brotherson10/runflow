@@ -5,7 +5,6 @@ import { createAuth, type AuthLogger, type RunflowAuth } from "../../../src/auth
 import type { TrustProxySetting } from "../../../src/config.ts";
 import type { DatabaseHandle } from "../../../src/db/client.ts";
 import type { ApiRateLimitConfig } from "../../../src/http/rate-limit.ts";
-import { MemoryMailbox, type MailKind, type MailMessage } from "../../../src/mail/mailer.ts";
 
 export const TEST_APP_ORIGIN = "http://localhost:5173";
 export const TEST_AUTH_SECRET = "runflow-test-secret-only-for-local-tests-0123456789";
@@ -42,7 +41,6 @@ export class CapturingLogger implements AuthLogger {
 export interface AuthTestServer {
   readonly baseUrl: string;
   readonly auth: RunflowAuth;
-  readonly mailbox: MemoryMailbox;
   readonly logger: CapturingLogger;
   close(): Promise<void>;
 }
@@ -78,14 +76,12 @@ export async function startAuthServer(
   handle: DatabaseHandle,
   options: AuthTestServerOptions = {},
 ): Promise<AuthTestServer> {
-  const mailbox = new MemoryMailbox();
   const logger = new CapturingLogger();
   const auth = createAuth({
     db: handle.db,
     appOrigin: options.appOrigin ?? TEST_APP_ORIGIN,
     secret: TEST_AUTH_SECRET,
     isProduction: options.isProduction ?? false,
-    mailer: mailbox,
     logger,
     ...(options.passwordBreachCheck ? { passwordBreachCheck: options.passwordBreachCheck } : {}),
     ...(options.background ? { background: options.background } : {}),
@@ -135,7 +131,6 @@ export async function startAuthServer(
   return {
     baseUrl: `http://127.0.0.1:${String(port)}`,
     auth,
-    mailbox,
     logger,
     close: async () => {
       const closed = new Promise<void>((resolve, reject) => {
@@ -273,60 +268,18 @@ export function newUserInput(overrides: Partial<SignUpInput> = {}): SignUpInput 
 
 export const AUTH = "/api/auth";
 
-/** Espera pela mensagem (o envio corre em segundo plano) e devolve a mais recente. */
-export async function waitForMail(
-  mailbox: MemoryMailbox,
-  to: string,
-  kind: MailKind,
-  count = 1,
-  timeoutMs = 2000,
-): Promise<MailMessage> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const found = mailbox.find(to, kind);
-    const last = found.at(-1);
-    if (found.length >= count && last) return last;
-    if (Date.now() > deadline) throw new Error(`E-mail ${kind} para ${to} não chegou (${String(found.length)}/${String(count)}).`);
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-}
-
-/** Token do link de um e-mail, identificado por parsing de URL (origem e caminho exatos). */
-export function tokenFromMail(message: MailMessage, pathname: string, origin = TEST_APP_ORIGIN): string {
-  for (const word of message.text.split(/\s+/)) {
-    const url = URL.parse(word);
-    if (url?.origin !== origin || url.pathname !== pathname) continue;
-    const tokens = url.searchParams.getAll("token");
-    if (tokens.length === 1 && tokens[0]) return tokens[0];
-  }
-  throw new Error(`Sem link ${pathname} no e-mail ${message.kind}.`);
-}
-
-/** Confirma o e-mail pelo endpoint oficial, com o token do e-mail capturado. */
-export async function verifyEmailFromMailbox(
-  client: TestClient,
-  mailbox: MemoryMailbox,
-  email: string,
-  origin = TEST_APP_ORIGIN,
-): Promise<void> {
-  const token = tokenFromMail(await waitForMail(mailbox, email, "email-verification"), "/confirmar-email", origin);
-  const res = await client.get(`${AUTH}/verify-email?token=${encodeURIComponent(token)}`);
-  if (res.status !== 200) throw new Error(`Confirmação de e-mail falhou: ${String(res.status)} ${res.text}`);
-}
-
 /**
- * Regista, confirma o e-mail (fluxo real: e-mail capturado → verify-email) e inicia
- * sessão; devolve o cliente com o cookie de sessão.
+ * Regista e inicia sessão (projeto sem confirmação de e-mail, D52); devolve o
+ * cliente com o cookie de sessão.
  */
 export async function signedInClient(
-  server: Pick<AuthTestServer, "baseUrl" | "mailbox">,
+  server: Pick<AuthTestServer, "baseUrl">,
   overrides: Partial<SignUpInput> = {},
 ): Promise<{ client: TestClient; input: SignUpInput; userId: string }> {
   const client = new TestClient(server.baseUrl);
   const input = newUserInput(overrides);
   const signUp = await client.post<{ user: { id: string } }>(`${AUTH}/sign-up/email`, input);
   if (signUp.status !== 200) throw new Error(`Registo falhou: ${String(signUp.status)} ${signUp.text}`);
-  await verifyEmailFromMailbox(client, server.mailbox, input.email.toLowerCase());
   const signIn = await client.post(`${AUTH}/sign-in/email`, {
     email: input.email,
     password: input.password,
@@ -337,7 +290,3 @@ export async function signedInClient(
 
 export const SESSION_COOKIE = "runflow.session_token";
 
-/** Espera que tarefas em segundo plano (envio de e-mail) terminem. */
-export function flushBackground(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 50));
-}
