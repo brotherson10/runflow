@@ -1,15 +1,19 @@
 # RunFlow V2
 
-Aplicação pessoal de acompanhamento de corrida — **em desenvolvimento**.
+Aplicação full stack de acompanhamento de corrida (projeto de portefólio).
 
-> **Publicação parcial (Vercel Hobby):** <https://runflow-eta.vercel.app>
-> - **Disponível:** landing e demo sem conta (`/demo`), com CSP e restantes cabeçalhos.
-> - **Ainda indisponível:** contas, treinos e objetivos. A API responde 503 até haver
->   base de dados (Neon Free) e e-mail (Resend Free).
-> - **Domínio:** `runflow.brotherson.dev` já está associado ao projeto, mas aguarda o
->   registo DNS.
->
-> Passos em falta em [docs/deployment.md](docs/deployment.md).
+**Em produção:** <https://runflow-eta.vercel.app> (Vercel Hobby + Neon Free, Frankfurt).
+
+- **Funciona:** registo e login, treinos (criar, editar, eliminar, histórico),
+  dashboard do período, objetivo (criar, editar, concluir, substituir), conta e logout.
+  Há também uma demo sem conta e só de leitura em `/demo`.
+- **Limitações (projeto demonstrativo, D52):**
+  - não há envio de e-mail, por isso o e-mail não é verificado e não existe
+    recuperação de palavra-passe;
+  - sem domínio próprio;
+  - o plano Hobby limita o cron de limpeza a uma execução diária;
+  - o Neon Free suspende a base após 5 min de inatividade, por isso o primeiro pedido
+    seguinte é mais lento.
 
 Esta é a evolução do RunFlow criado no estágio Full Stack da DecodeLabs. A versão
 do estágio continua preservada nos repositórios originais:

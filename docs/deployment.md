@@ -1,51 +1,54 @@
 # Publicação
 
-## Estado atual: Vercel Hobby (2026-10-15)
+## Estado atual: Vercel Hobby + Neon Free (2026-10-15)
 
-A topologia escolhida passou a ser a **Vercel** (Hobby, gratuito) e substitui a
-Render descrita mais abaixo, que fica só como referência.
+Publicado em <https://runflow-eta.vercel.app>, sem e-mail nem domínio próprio (D52).
+A Render, mais abaixo, fica só como referência.
 
-- **Projeto:** `runflow` na equipa B10 (plano hobby).
-- **Produção:** <https://runflow-eta.vercel.app>
-- **Função:** região `fra1`, Node 24, `maxDuration` 30 s.
-- **Web:** servida pela CDN, com as `routes` do `vercel.json`. A rota `/api` vai para
-  uma única função Express (`api/index.mjs` → `apps/api/dist/vercel.js`).
+- **Vercel:**
+  - projeto `runflow` na equipa B10 (plano hobby);
+  - função em `fra1`, Node 24, `maxDuration` 30 s;
+  - web servida pela CDN (`routes` do `vercel.json`); `/api` vai para uma única
+    função Express (`api/index.mjs` → `apps/api/dist/vercel.js`).
+- **Neon Free** (Vercel Marketplace, plano `free_v3`), recurso `runflow-db`:
+  - região `aws-eu-central-1` (Frankfurt);
+  - a aplicação usa `DATABASE_URL` (pooler); as migrations usam
+    `DATABASE_URL_UNPOOLED` (direto);
+  - TLS: o `pg` 8 trata `sslmode=require` como `verify-full` (certificado
+    verificado); o aviso de mudança futura aparece nos logs.
+- **Migrations:** aplicadas num passo explícito (`src/cli/migrate.ts` com o URL
+  direto), sem seeds nem testes. `migration-status` mostra 0000–0002 "aplicada".
+- **Variáveis (produção, encriptadas):**
+  - `APP_URL=https://runflow-eta.vercel.app`, `BETTER_AUTH_SECRET`, `CRON_SECRET`,
+    `TRUST_PROXY=1`;
+  - as do Neon, definidas pela integração;
+  - nenhuma variável de e-mail.
 - **Cron diário:** `/api/internal/cron/purge-rate-limits`, autenticado com
-  `CRON_SECRET`, em lotes limitados e idempotente.
-- **Variáveis já definidas (produção, encriptadas):** `BETTER_AUTH_SECRET`,
-  `CRON_SECRET` e `TRUST_PROXY=1`.
-- **Verificado em produção:**
-  - landing, rotas diretas da SPA, demo sem conta;
-  - CSP, HSTS e restantes cabeçalhos;
-  - assets com cache `immutable` e asset inexistente com 404;
-  - `/api` (qualquer capitalização) chega à função, que responde 503 por falta de
-    configuração (sem detalhes no corpo);
-  - o bundle não contém segredos.
+  `CRON_SECRET` (401 sem ele), em lotes limitados e idempotente.
+- **Verificado em produção (2026-10-15):**
+  - registo, login sem confirmação e `/me`;
+  - cookie `__Secure-runflow.session_token` com `Secure`, `HttpOnly` e
+    `SameSite=Lax`;
+  - treinos: criar, editar, listar e eliminar, com o dashboard atualizado;
+  - objetivos: criar, impedir um segundo ativo (409), concluir e substituir;
+  - isolamento entre duas contas (404 e listas vazias);
+  - origem: escritas sem `Origin` ou com outra origem dão 403;
+  - recuperação e confirmação dão 410, sem pedidos a serviços de e-mail;
+  - logout invalida a sessão;
+  - demo sem pedidos à API; registo pela interface sem erros na consola.
+- **IP e proxy:**
+  - cabeçalhos `X-Forwarded-For`, `X-Real-IP`, `X-Vercel-Forwarded-For` e
+    `X-Runflow-Client-Ip` forjados não contornam o rate limiting (429 ao 4.º-5.º
+    pedido);
+  - a chave gravada na base é o IP público real do cliente, nunca um IP interno da
+    Vercel nem um forjado.
 
-### Passos em falta (precisam de ação do titular das contas)
+### Comandos
 
-1. **Neon (gratuito, Vercel Marketplace):**
-   - aceitar os termos em
-     <https://vercel.com/b10-bb2d/~/integrations/accept-terms/neon?source=cli>;
-   - depois instalar: `vercel integration add neon --plan free_v3 -m region=fra1 -m auth=false --name runflow-db`.
-     A integração define `DATABASE_URL` (pooled) e o URL direto.
-   - aplicar as migrations com o URL **direto**: `npm run db:migrate:deploy`, e
-     confirmar com `npm run db:migrations:status`.
-2. **Resend Free:**
-   - criar a conta diretamente (a integração do Marketplace não mostra um plano
-     gratuito);
-   - adicionar o domínio de envio `runflow.brotherson.dev` (região `eu-west-1`) e
-     criar uma chave só de envio;
-   - definir `MAIL_TRANSPORT=resend`, `RESEND_API_KEY` e
-     `MAIL_FROM=RunFlow <nao-responder@runflow.brotherson.dev>`.
-3. **DNS na Cloudflare** (sem alterar os registos existentes):
-   - `A runflow 76.76.21.21`, em modo DNS only;
-   - os registos SPF, DKIM e MX de envio indicados pela Resend;
-   - `_dmarc` com `p=none`, se ainda não existir.
-4. **Fecho:**
-   - definir `APP_URL=https://runflow.brotherson.dev`;
-   - fazer um novo deploy;
-   - validar o IP do cliente: rate limiting com um `X-Forwarded-For` forjado.
+- **Deploy:** `vercel deploy --prod`. O repositório não está ligado à Vercel por Git;
+  o deploy é feito pela CLI a partir do HEAD.
+- **Migrations:** `DATABASE_URL=<DATABASE_URL_UNPOOLED> npm run db:migrate`, depois
+  `npm run db:migrations:status`, antes do deploy.
 
 ## Plano original (Render, preterido)
 
