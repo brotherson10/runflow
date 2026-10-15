@@ -7,7 +7,7 @@ import tseslint from "typescript-eslint";
 import { securityRules } from "./eslint.security.js";
 
 export default defineConfig([
-  globalIgnores(["**/dist/", "**/coverage/", "**/node_modules/", ".e2e/", "test-results/", "playwright-report/"]),
+  globalIgnores(["**/dist/", "**/coverage/", "**/node_modules/", ".e2e/", "test-results/", "playwright-report/", ".vercel/"]),
 
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,

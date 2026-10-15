@@ -2,8 +2,14 @@
 
 Aplicação pessoal de acompanhamento de corrida — **em desenvolvimento**.
 
-> **Deploy pendente:** ainda não existe nenhuma versão publicada nem URL pública.
-> O plano de publicação (nada criado) está em [docs/deployment.md](docs/deployment.md).
+> **Publicação parcial (Vercel Hobby):** <https://runflow-eta.vercel.app>
+> - **Disponível:** landing e demo sem conta (`/demo`), com CSP e restantes cabeçalhos.
+> - **Ainda indisponível:** contas, treinos e objetivos. A API responde 503 até haver
+>   base de dados (Neon Free) e e-mail (Resend Free).
+> - **Domínio:** `runflow.brotherson.dev` já está associado ao projeto, mas aguarda o
+>   registo DNS.
+>
+> Passos em falta em [docs/deployment.md](docs/deployment.md).
 
 Esta é a evolução do RunFlow criado no estágio Full Stack da DecodeLabs. A versão
 do estágio continua preservada nos repositórios originais:

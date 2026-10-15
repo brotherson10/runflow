@@ -26,3 +26,6 @@ playwright-report/
 
 # Vercel CLI (ligação local ao projeto e build local)
 .vercel/
+
+.vercel
+.env*

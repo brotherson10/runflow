@@ -1,10 +1,59 @@
-# Plano de publicação (nada criado)
+# Publicação
+
+## Estado atual: Vercel Hobby (2026-10-15)
+
+A topologia escolhida passou a ser a **Vercel** (Hobby, gratuito) e substitui a
+Render descrita mais abaixo, que fica só como referência.
+
+- **Projeto:** `runflow` na equipa B10 (plano hobby).
+- **Produção:** <https://runflow-eta.vercel.app>
+- **Função:** região `fra1`, Node 24, `maxDuration` 30 s.
+- **Web:** servida pela CDN, com as `routes` do `vercel.json`. A rota `/api` vai para
+  uma única função Express (`api/index.mjs` → `apps/api/dist/vercel.js`).
+- **Cron diário:** `/api/internal/cron/purge-rate-limits`, autenticado com
+  `CRON_SECRET`, em lotes limitados e idempotente.
+- **Variáveis já definidas (produção, encriptadas):** `BETTER_AUTH_SECRET`,
+  `CRON_SECRET` e `TRUST_PROXY=1`.
+- **Verificado em produção:**
+  - landing, rotas diretas da SPA, demo sem conta;
+  - CSP, HSTS e restantes cabeçalhos;
+  - assets com cache `immutable` e asset inexistente com 404;
+  - `/api` (qualquer capitalização) chega à função, que responde 503 por falta de
+    configuração (sem detalhes no corpo);
+  - o bundle não contém segredos.
+
+### Passos em falta (precisam de ação do titular das contas)
+
+1. **Neon (gratuito, Vercel Marketplace):**
+   - aceitar os termos em
+     <https://vercel.com/b10-bb2d/~/integrations/accept-terms/neon?source=cli>;
+   - depois instalar: `vercel integration add neon --plan free_v3 -m region=fra1 -m auth=false --name runflow-db`.
+     A integração define `DATABASE_URL` (pooled) e o URL direto.
+   - aplicar as migrations com o URL **direto**: `npm run db:migrate:deploy`, e
+     confirmar com `npm run db:migrations:status`.
+2. **Resend Free:**
+   - criar a conta diretamente (a integração do Marketplace não mostra um plano
+     gratuito);
+   - adicionar o domínio de envio `runflow.brotherson.dev` (região `eu-west-1`) e
+     criar uma chave só de envio;
+   - definir `MAIL_TRANSPORT=resend`, `RESEND_API_KEY` e
+     `MAIL_FROM=RunFlow <nao-responder@runflow.brotherson.dev>`.
+3. **DNS na Cloudflare** (sem alterar os registos existentes):
+   - `A runflow 76.76.21.21`, em modo DNS only;
+   - os registos SPF, DKIM e MX de envio indicados pela Resend;
+   - `_dmarc` com `p=none`, se ainda não existir.
+4. **Fecho:**
+   - definir `APP_URL=https://runflow.brotherson.dev`;
+   - fazer um novo deploy;
+   - validar o IP do cliente: rate limiting com um `X-Forwarded-For` forjado.
+
+## Plano original (Render, preterido)
 
 Estado: **código de produção pronto (Fase 5B); infraestrutura por criar**. Nenhuma
 conta, serviço, registo DNS ou envio real de e-mail foi criado. Preços e limites
 lidos nas páginas oficiais em **2026-10-13**; confirmar de novo no dia da publicação.
 
-## Topologia: uma origem
+### Topologia: uma origem
 
 ```
 https://runflow.brotherson.dev
@@ -30,7 +79,7 @@ limiting (D43) corre dentro dele.
 sem processo contínuo para o agendador e com um pool `pg` por instância. A Render
 corre um processo Node contínuo, como o servidor usado localmente e nos E2E.
 
-## Limites e custos (páginas oficiais, 2026-10-13)
+### Limites e custos (páginas oficiais, 2026-10-13)
 
 | Serviço | Plano | Custo | Limites relevantes |
 | --- | --- | --- | --- |
@@ -53,7 +102,7 @@ Fontes: [render.com/docs/free](https://render.com/docs/free),
 [neon.com/pricing](https://neon.com/pricing),
 [resend.com/pricing](https://resend.com/pricing).
 
-## DNS (Cloudflare — por fazer, não feito)
+### DNS (Cloudflare — por fazer, não feito)
 
 O DNS de brotherson.dev está na Cloudflare (NS `ajay`/`brenna.ns.cloudflare.com`,
 verificado com `nslookup`). O apex atual não muda.
@@ -69,7 +118,7 @@ verificado com `nslookup`). O apex atual não muda.
 - **DMARC**: verificar se brotherson.dev já tem `_dmarc`; se não tiver, começar com
   `p=none` e um endereço de relatórios.
 
-## Variáveis de ambiente (produção)
+### Variáveis de ambiente (produção)
 
 `readServerConfig` recusa arrancar em produção sem: segredo, `APP_URL` em HTTPS,
 `MAIL_TRANSPORT=resend` com chave e remetente válidos, HIBP ligado e o build da web
@@ -107,7 +156,7 @@ serviço:
 
 Até lá, o valor é uma proposta.
 
-## Comandos de publicação
+### Comandos de publicação
 
 Nada disto foi executado contra serviços reais. Os comandos foram ensaiados
 localmente: build completo, `db:migrate:deploy` e `migrate:status` compilados
@@ -156,7 +205,7 @@ rollback da aplicação sem mexer na base.
   histórico do Neon (6 h no Free, 7 dias no Launch). **Perde as escritas posteriores.**
   Verificar com `db:migrations:status` antes de voltar a apontar a aplicação.
 
-## Cabeçalhos de segurança
+### Cabeçalhos de segurança
 
 A fonte única é
 [`packages/shared/src/security-headers.ts`](../packages/shared/src/security-headers.ts).
@@ -188,7 +237,7 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
   capitalização (404 problem+json), nem em caminhos com extensão (um asset
   inexistente dá 404).
 
-## Antes de abrir o serviço (bloqueios)
+### Antes de abrir o serviço (bloqueios)
 
 1. Criar as contas e os recursos: serviço Render, projeto Neon e domínio na Resend.
 2. Configurar o DNS na Cloudflare. **Não foi feito.**
